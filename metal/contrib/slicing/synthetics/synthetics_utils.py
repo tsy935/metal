@@ -149,24 +149,36 @@ def generate_synthetic_data(config, x_var=None, x_val=None):
         config["variances"],
     )
 
-    # overwrite data points to create head slice
+    if config["head_config"]:
+        # overwrite data points to create head slice
+        # find radius for specified overlap proportion
+        slice_radius = (
+            overlap_proportion_to_slice_radius(x_val, config)
+            if x_var == "op"
+            else config["head_config"]["r"]
+        )
 
-    # find radius for specified overlap proportion
-    slice_radius = (
-        overlap_proportion_to_slice_radius(x_val, config)
-        if x_var == "op"
-        else config["head_config"]["r"]
-    )
-    # modifies C and Y in place
-    create_circular_slice(
-        X,
-        Y,
-        C,
-        h=config["head_config"]["h"],
-        k=config["head_config"]["k"],
-        r=slice_radius,
-        slice_label=-1,
-    )
+        create_circular_slice(
+            X,
+            Y,
+            C,
+            h=config["head_config"]["h"],
+            k=config["head_config"]["k"],
+            r=slice_radius,
+            slice_label=config["head_config"]["slice_label"],
+        )
+
+    # labeling function generation
+
+    accs = config["accs"]
+    if x_var == "acc":
+        accs[-1] = x_val  # vary head lf (last index) accuracy
+
+    covs = config["covs"]
+    if x_var == "cov":
+        covs[-1] = x_val  # vary head lf (last index) coverage over slice
+
+    L = generate_label_matrix(config["N"], accs, covs, Y, C)
 
     # labeling function generation
 
@@ -183,9 +195,7 @@ def generate_synthetic_data(config, x_var=None, x_val=None):
     return X, Y, C, L
 
 
-def plot_slice_scores(
-    results, slice_name="S2", xlabel="Overlap Proportion", save_dir=None
-):
+def plot_slice_scores(results, slice_name="S2", xlabel="Overlap Proportion"):
     baseline_scores = results["baseline"]
     manual_scores = results["manual"]
     attention_scores = results["attention"]
@@ -216,9 +226,3 @@ def plot_slice_scores(
     plt.ylabel(f"Accuracy on {slice_name}")
     plt.ylim(bottom=0, top=1)
     plt.legend()
-    plt.show()
-
-    if save_dir is not None:
-        save_path = os.path.join(save_dir, f"{slice_name}-{xlabel}.png")
-        plt.savefig(save_path)
-        plt.clf()

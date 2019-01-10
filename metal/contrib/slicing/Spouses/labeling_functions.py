@@ -27,7 +27,6 @@ family = {
 family = family | {f + "-in-law" for f in family}
 other = {"boyfriend", "girlfriend" "boss", "employee", "secretary", "co-worker"}
 
-
 # Helper function to get last name
 def last_name(s):
     name_parts = s.split(" ")

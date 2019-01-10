@@ -10,86 +10,122 @@ import json
 import os
 import sys
 from collections import defaultdict
+from time import strftime, time
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from synthetics_utils import generate_synthetic_data, plot_slice_scores
 from tqdm import tqdm
 
+from metal.contrib.logging.tensorboard import TensorBoardWriter
 from metal.contrib.slicing.online_dp import (
     LinearModule,
     MLPModule,
     SliceDPModel,
 )
+from synthetics_utils import generate_synthetic_data, plot_slice_scores
 
 sys.path.append("/dfs/scratch0/vschen/metal")
 
 
-def train_models(X, L, accs, verbose=False, use_cuda=False):
+def train_models(
+    train_data,
+    test_data,
+    accs,
+    input_module_class,
+    init_kwargs,
+    train_kwargs,
+    verbose=False,
+    use_cuda=False,
+    tensorboard_logdir=None,
+):
     """
     Trains baseline, oracle, and attention model
     Args:
-        - X: features
-        - L: LF matrix
+        - train_data: (X, L) data for slice model to train on
+        - test_data: (X, Y) data for validation
         - accs: [list of floats] accuracies for LFs
+        - input_module_class: [nn.Module] uninitialized input module class for slice model
+        - init_kwargs [dict]: kwargs to initialize input_module_class
     Returns:
         - model_[0,1,2]: trained baseline, oracle, and attention model
     """
 
+    X, L = train_data
     m = np.shape(L)[1]  # num LFs
     d = X.shape[1]  # num features
-    X_train = torch.from_numpy(X.astype(np.float32))
-    L_train = torch.from_numpy(L.astype(np.float32))
-
-    train_kwargs = {
-        "batch_size": 1000,
-        "n_epochs": 250,
-        "print_every": 50,
-        "validation_metric": "f1",
-        "disable_prog_bar": True,
-    }
 
     # baseline model, no attention
     r = 2
+    init_kwargs.update({"output_dim": r})
     uniform_model = SliceDPModel(
-        LinearModule(d, r, bias=True),
+        input_module_class(**init_kwargs),
         accs,
         r=r,
-        reweight=False,
+        rw=False,
         verbose=verbose,
         use_cuda=use_cuda,
     )
-    uniform_model.train_model((X_train, L_train), **train_kwargs)
+    curr_time = strftime("%H_%M_%S")
+    log_writer = (
+        TensorBoardWriter(
+            log_dir=tensorboard_logdir, run_dir=f"uniform_{curr_time}"
+        )
+        if tensorboard_logdir
+        else None
+    )
+    uniform_model.train_model(
+        train_data, dev_data=test_data, log_writer=log_writer, **train_kwargs
+    )
 
-    # oracle, manual reweighting
+    # manual reweighting
     # currently hardcode weights so LF[-1] has double the weight
     weights = np.ones(m, dtype=np.float32)
     weights[-1] = 2.0
     r = 2
+    init_kwargs.update({"output_dim": r})
     manual_model = SliceDPModel(
-        LinearModule(d, r, bias=True),
+        input_module_class(**init_kwargs),
         accs,
         r=r,
-        reweight=False,
+        rw=False,
         L_weights=weights,
         verbose=verbose,
         use_cuda=use_cuda,
     )
-    manual_model.train_model((X_train, L_train), **train_kwargs)
+    log_writer = (
+        TensorBoardWriter(
+            log_dir=tensorboard_logdir, run_dir=f"manual_{curr_time}"
+        )
+        if tensorboard_logdir
+        else None
+    )
+    manual_model.train_model(
+        train_data, dev_data=test_data, log_writer=log_writer, **train_kwargs
+    )
 
     # our model, with attention
     r = 2
+    init_kwargs.update({"output_dim": r})
     attention_model = SliceDPModel(
-        LinearModule(d, r, bias=True),
+        input_module_class(**init_kwargs),
         accs,
         r=r,
-        reweight=True,
+        rw=True,
         verbose=verbose,
         use_cuda=use_cuda,
     )
-    attention_model.train_model((X_train, L_train), **train_kwargs)
+    log_writer = (
+        TensorBoardWriter(
+            log_dir=tensorboard_logdir, run_dir=f"attention_{curr_time}"
+        )
+        if tensorboard_logdir
+        else None
+    )
+    attention_model.train_model(
+        train_data, dev_data=test_data, log_writer=log_writer, **train_kwargs
+    )
 
     return uniform_model, manual_model, attention_model
 
@@ -105,16 +141,6 @@ def eval_model(model, data, eval_dict):
         results_dict: mapping {"slice_name": scores}
             includes "overall" accuracy by default
     """
-    X, Y = data
-    # conver to multiclass labels
-    if -1 in Y:
-        Y[Y == -1] = 2
-
-    data = (
-        torch.from_numpy(X.astype(np.float32)),
-        torch.from_numpy(Y.astype(np.float32)),
-    )
-
     slice_scores = {}
     for slice_name, eval_idx in eval_dict.items():
         slice_scores[slice_name] = model.score_on_slice(
@@ -158,24 +184,51 @@ def simulate(data_config, generate_data_fn, experiment_config):
             # generate data
             X, Y, C, L = generate_synthetic_data(data_config, var_name, x)
 
+            # convert to multiclass labels
+            if -1 in Y:
+                Y[Y == -1] = 2
+
             # train the models
-            uniform_model, manual_model, attention_model = train_models(
-                X, L, data_config["accs"]
+            X = torch.from_numpy(X.astype(np.float32))
+            L = torch.from_numpy(L.astype(np.float32))
+            Y = torch.from_numpy(Y.astype(np.float32))
+            split_idx = int(len(X) * experiment_config["train_prop"])
+            X_train, X_test = X[:split_idx], X[split_idx:]
+            Y_train, Y_test = Y[:split_idx], Y[split_idx:]
+            L_train, L_test = L[:split_idx], L[split_idx:]
+            C_train, C_test = C[:split_idx], C[split_idx:]
+
+            train_data = (X_train, L_train)
+            test_data = (X_test, Y_test)
+
+            logdir = experiment_config.get("tensorboard_logdir")
+            if logdir is not None:
+                logdir = os.path.join(logdir, f"{var_name}_{x}")
+            baseline_model, manual_model, attention_model = train_models(
+                train_data,
+                test_data,
+                data_config["accs"],
+                MLPModule,
+                experiment_config["input_module_kwargs"],
+                experiment_config["train_kwargs"],
+                tensorboard_logdir=logdir,
             )
 
             # score the models
             S0_idx, S1_idx, S2_idx = (
-                np.where(C == 0)[0],
-                np.where(C == 1)[0],
-                np.where(C == 2)[0],
+                np.where(C_test == 0)[0],
+                np.where(C_test == 1)[0],
+                np.where(C_test == 2)[0],
             )
             eval_dict = {"S0": S0_idx, "S1": S1_idx, "S2": S2_idx}
             baseline_scores[x].append(
-                eval_model(uniform_model, (X, Y), eval_dict)
+                eval_model(baseline_model, test_data, eval_dict)
             )
-            manual_scores[x].append(eval_model(manual_model, (X, Y), eval_dict))
+            manual_scores[x].append(
+                eval_model(manual_model, test_data, eval_dict)
+            )
             attention_scores[x].append(
-                eval_model(attention_model, (X, Y), eval_dict)
+                eval_model(attention_model, test_data, eval_dict)
             )
 
     return baseline_scores, manual_scores, attention_scores
@@ -195,8 +248,9 @@ data_config = {
         "h": 4,  # horizontal shift of slice
         "k": 0,  # vertical shift of slice
         "r": 1,  # radius of slice
+        "slice_label": -1,
     },
-    "accs": np.array([0.75, 0.75, 0.75]),  # default accuracy of LFs
+    "accs": np.array([0.9, 0.9, 0.9]),  # default accuracy of LFs
     "covs": np.array([0.9, 0.9, 0.9]),  # default coverage of LFs
 }
 
@@ -234,6 +288,22 @@ if __name__ == "__main__":
             else list(args.x_range)
         ),
         "x_var": args.variable,
+        "input_module_kwargs": {
+            "input_dim": 2,
+            "middle_dims": [50, 50, 50],
+            "bias": True,
+        },
+        "train_kwargs": {
+            "batch_size": 1000,
+            "n_epochs": 50,
+            "print_every": 10,
+            "validation_metric": "accuracy",
+            "disable_prog_bar": True,
+            "l2": 1e-5,
+        },
+        "checkpoint_runway": 5,
+        "train_prop": 0.8,
+        "tensorboard_logdir": args.save_dir,
     }
 
     # run simulations
@@ -257,7 +327,14 @@ if __name__ == "__main__":
         xlabel = "Head Accuracy"
     elif args.variable == "cov":
         xlabel = "Head Coverage"
-    plot_slice_scores(results, "S2", xlabel=xlabel, save_dir=args.save_dir)
-    plot_slice_scores(results, "S1", xlabel=xlabel, save_dir=args.save_dir)
-    plot_slice_scores(results, "S0", xlabel=xlabel, save_dir=args.save_dir)
-    plot_slice_scores(results, "overall", xlabel=xlabel, save_dir=args.save_dir)
+
+    plt.figure(figsize=(10, 10))
+    plt.subplot(2, 2, 1)
+    plot_slice_scores(results, "S2", xlabel=xlabel)
+    plt.subplot(2, 2, 2)
+    plot_slice_scores(results, "S1", xlabel=xlabel)
+    plt.subplot(2, 2, 3)
+    plot_slice_scores(results, "S0", xlabel=xlabel)
+    plt.subplot(2, 2, 4)
+    plot_slice_scores(results, "overall", xlabel=xlabel)
+    plt.savefig(os.path.join(args.save_dir, "results.png"))

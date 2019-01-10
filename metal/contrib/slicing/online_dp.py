@@ -76,6 +76,17 @@ class SliceDPModel(EndModel):
         head_module = nn.Linear(self.r, self.m, bias=False)
 
         # Initialize EndModel.
+        input_layer_config = kwargs.get(
+            "input_layer_config",
+            # default to removing nonlinearities from input_layer output
+            {
+                "input_relu": False,
+                "input_batchnorm": False,
+                "input_dropout": 0.0,
+            },
+        )
+        kwargs["input_layer_config"] = input_layer_config
+
         # Note: We overwrite `self.k` which conventionally refers to the
         # number of tasks to `self.m` which is the number of LFs in our setting.
         super().__init__(
