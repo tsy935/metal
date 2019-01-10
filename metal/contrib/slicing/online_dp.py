@@ -28,7 +28,7 @@ class MLPModule(nn.Module):
         for i in range(len(dims) - 1):
             layers.append(nn.Linear(dims[i], dims[i + 1], bias=bias))
             if i + 1 < len(dims):
-                layers.append(nn.Sigmoid())
+                layers.append(nn.ReLU())
 
         self.input_layer = nn.Sequential(*layers)
 
@@ -192,10 +192,10 @@ class SliceDPModel(EndModel):
 
         # Return the list of head outputs + DP head
         outputs = self.Y_head(xr).squeeze()
-        return F.softmax(outputs)
+        return outputs
 
     def predict_proba(self, x):
-        return self.forward_Y(x).data.cpu().numpy()
+        return F.softmax(self.forward_Y(x)).data.cpu().numpy()
 
     def score_on_slice(
         self,
