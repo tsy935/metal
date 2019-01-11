@@ -126,7 +126,9 @@ class SliceDPModel(EndModel):
         self.w[np.abs(self.w) == np.inf] = 0  # set weights from acc==0 to 0
 
         if self.config["use_cuda"]:
+            # L_weights: how much to weight the loss for each L_head
             self.L_weights = self.L_weights.cuda()
+            # w: TODO: needs a better name and explanation of what it is
             self.w = self.w.cuda()
 
         if self.config["verbose"]:
@@ -151,6 +153,7 @@ class SliceDPModel(EndModel):
             self.criteria(self.forward_L(X), L_01) @ self.L_weights
         )
 
+        # TODO: Calculate Y_tilde once and save; don't recalculate
         # Compute the noise-aware DP loss w/ the reweighted representation
         if Y_tilde is None:
             # Note: Need to convert L from {0,1} --> {-1,1}
@@ -178,6 +181,9 @@ class SliceDPModel(EndModel):
 
         # Concatenate with the LF attention-weighted representation as well
         if self.reweight:
+            # NOTE: for less squeezing/copying, could do something like:
+            # preds = ...
+            # (F.softmax(preds).expand(preds.size()) * preds).sum(-1)
 
             # A is the [batch_size, 1, m] Tensor representing the relative
             # "confidence" of each LF on each example
