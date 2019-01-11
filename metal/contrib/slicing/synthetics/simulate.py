@@ -25,8 +25,52 @@ from metal.contrib.slicing.online_dp import (
     SliceDPModel,
 )
 from synthetics_utils import generate_synthetic_data, plot_slice_scores
-
 sys.path.append("/dfs/scratch0/vschen/metal")
+
+
+# Define default simulation configs; can be overwritten
+data_config = {
+    # data generation
+    "N": 10000,  # num data points
+    "mus": [
+        np.array([-8, 0]),  # Mode 1: Y = -1
+        np.array([3, 0]),  # Mode 2: Y = 1
+    ],
+    "labels": [-1, 1],  # labels of each slice
+    "props": [0.25, 0.75],  # proportion of data in each mode
+    "variances": [1, 2],  # proportion of data in each mode
+    "head_config": {
+        "h": 4,  # horizontal shift of slice
+        "k": 0,  # vertical shift of slice
+        "r": 1,  # radius of slice
+        "slice_label": -1,
+    },
+    "accs": np.array([0.9, 0.9, 0.9]),  # default accuracy of LFs
+    "covs": np.array([0.9, 0.9, 0.9]),  # default coverage of LFs
+}
+
+experiment_config = {
+    "num_trials": 1,
+    "x_range": np.linspace(0, 1.0, 5),
+    "x_var": None,
+    "input_module_class": MLPModule,
+    "input_module_kwargs": {
+       'input_dim': 2,
+        'middle_dims': [10, 10],
+       'bias': True
+     },
+    "train_kwargs": {
+        "n_epochs":20,
+        "print_every":10,
+        "validation_metric":"accuracy",
+        "disable_prog_bar":True,
+        "verbose":True,
+        "lr": 0.005,
+        "checkpoint_runway": 5,
+    },
+    "train_prop": 0.8,
+    "tensorboard_logdir": "./run_logs"
+}
 
 
 def train_models(
@@ -57,13 +101,14 @@ def train_models(
     d = X.shape[1]  # num features
 
     # baseline model, no attention
-    r = 2
+    r = 10
     init_kwargs.update({"output_dim": r})
+
     uniform_model = SliceDPModel(
         input_module_class(**init_kwargs),
         accs,
         r=r,
-        rw=False,
+        reweight=False,
         verbose=verbose,
         use_cuda=use_cuda,
     )
@@ -83,13 +128,13 @@ def train_models(
     # currently hardcode weights so LF[-1] has double the weight
     weights = np.ones(m, dtype=np.float32)
     weights[-1] = 2.0
-    r = 2
+    r = 10
     init_kwargs.update({"output_dim": r})
     manual_model = SliceDPModel(
         input_module_class(**init_kwargs),
         accs,
         r=r,
-        rw=False,
+        reweight=False,
         L_weights=weights,
         verbose=verbose,
         use_cuda=use_cuda,
@@ -106,13 +151,13 @@ def train_models(
     )
 
     # our model, with attention
-    r = 2
+    r = 10
     init_kwargs.update({"output_dim": r})
     attention_model = SliceDPModel(
         input_module_class(**init_kwargs),
         accs,
         r=r,
-        rw=True,
+        reweight=True,
         verbose=verbose,
         use_cuda=use_cuda,
     )
@@ -182,13 +227,13 @@ def simulate(data_config, generate_data_fn, experiment_config):
         for _ in tqdm(range(num_trials)):
 
             # generate data
-            X, Y, C, L = generate_synthetic_data(data_config, var_name, x)
+            X, Y, C, L = generate_data_fn(data_config, var_name, x)
 
             # convert to multiclass labels
             if -1 in Y:
                 Y[Y == -1] = 2
 
-            # train the models
+            # create data splits
             X = torch.from_numpy(X.astype(np.float32))
             L = torch.from_numpy(L.astype(np.float32))
             Y = torch.from_numpy(Y.astype(np.float32))
@@ -201,14 +246,16 @@ def simulate(data_config, generate_data_fn, experiment_config):
             train_data = (X_train, L_train)
             test_data = (X_test, Y_test)
 
+            # set tensorboard logging directory
             logdir = experiment_config.get("tensorboard_logdir")
             if logdir is not None:
                 logdir = os.path.join(logdir, f"{var_name}_{x}")
+
             baseline_model, manual_model, attention_model = train_models(
                 train_data,
                 test_data,
                 data_config["accs"],
-                MLPModule,
+                experiment_config["input_module_class"],
                 experiment_config["input_module_kwargs"],
                 experiment_config["train_kwargs"],
                 tensorboard_logdir=logdir,
@@ -232,27 +279,6 @@ def simulate(data_config, generate_data_fn, experiment_config):
             )
 
     return baseline_scores, manual_scores, attention_scores
-
-
-data_config = {
-    # data generation
-    "N": 10000,  # num data points
-    "mus": [
-        np.array([-3, 0]),  # Mode 1: Y = -1
-        np.array([3, 0]),  # Mode 2: Y = 1
-    ],
-    "labels": [-1, 1],  # labels of each slice
-    "props": [0.25, 0.75],  # proportion of data in each mode
-    "variances": [1, 2],  # proportion of data in each mode
-    "head_config": {
-        "h": 4,  # horizontal shift of slice
-        "k": 0,  # vertical shift of slice
-        "r": 1,  # radius of slice
-        "slice_label": -1,
-    },
-    "accs": np.array([0.9, 0.9, 0.9]),  # default accuracy of LFs
-    "covs": np.array([0.9, 0.9, 0.9]),  # default coverage of LFs
-}
 
 if __name__ == "__main__":
     import warnings
@@ -279,33 +305,16 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # define simulation config
-    experiment_config = {
-        "num_trials": args.n,
-        "x_range": (
-            np.linspace(0, 1.0, 5)
-            if args.x_range is None
-            else list(args.x_range)
-        ),
-        "x_var": args.variable,
-        "input_module_kwargs": {
-            "input_dim": 2,
-            "middle_dims": [50, 50, 50],
-            "bias": True,
-        },
-        "train_kwargs": {
-            "batch_size": 1000,
-            "n_epochs": 50,
-            "print_every": 10,
-            "validation_metric": "accuracy",
-            "disable_prog_bar": True,
-            "l2": 1e-5,
-        },
-        "checkpoint_runway": 5,
-        "train_prop": 0.8,
-        "tensorboard_logdir": args.save_dir,
-    }
-
+    # override simulation config
+    if args.n:
+        experiment_config["num_trials"] = args.n
+    if args.x_range:
+        experiment_config["x_range"] = args.x_range
+    if args.x_range:
+        experiment_config["x_var"] = args.variable
+    if args.save_dir:
+        experiment_config["tensorboard_logdir"] = args.save_dir
+        
     # run simulations
     baseline_scores, manual_scores, attention_scores = simulate(
         data_config, generate_synthetic_data, experiment_config
