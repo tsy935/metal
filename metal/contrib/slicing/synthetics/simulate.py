@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from synthetics_utils import generate_synthetic_data, plot_slice_scores
 from tqdm import tqdm
 
 from metal.contrib.logging.tensorboard import TensorBoardWriter
@@ -24,7 +25,7 @@ from metal.contrib.slicing.online_dp import (
     MLPModule,
     SliceDPModel,
 )
-from synthetics_utils import generate_synthetic_data, plot_slice_scores
+
 sys.path.append("/dfs/scratch0/vschen/metal")
 
 
@@ -38,7 +39,7 @@ data_config = {
     ],
     "labels": [-1, 1],  # labels of each slice
     "props": [0.25, 0.75],  # proportion of data in each mode
-    "variances": [1, 2],  # proportion of data in each mode
+    "variances": [3, 5],  # proportion of data in each mode
     "head_config": {
         "h": 4,  # horizontal shift of slice
         "k": 0,  # vertical shift of slice
@@ -46,7 +47,11 @@ data_config = {
         "slice_label": -1,
     },
     "accs": np.array([0.9, 0.9, 0.9]),  # default accuracy of LFs
-    "covs": np.array([0.9, 0.9, 0.9]),  # default coverage of LFs
+    "covs": [
+        ("recall", 0.9),
+        ("recall", 0.9),
+        ("recall", 0.9),
+    ],  # coverage of LFs, as define by prec., rec.
 }
 
 experiment_config = {
@@ -55,21 +60,21 @@ experiment_config = {
     "x_var": None,
     "input_module_class": MLPModule,
     "input_module_kwargs": {
-       'input_dim': 2,
-        'middle_dims': [10, 10],
-       'bias': True
-     },
+        "input_dim": 2,
+        "middle_dims": [10, 10],
+        "bias": True,
+    },
     "train_kwargs": {
-        "n_epochs":20,
-        "print_every":10,
-        "validation_metric":"accuracy",
-        "disable_prog_bar":True,
-        "verbose":True,
+        "n_epochs": 20,
+        "print_every": 10,
+        "validation_metric": "accuracy",
+        "disable_prog_bar": True,
+        "verbose": True,
         "lr": 0.005,
         "checkpoint_runway": 5,
     },
     "train_prop": 0.8,
-    "tensorboard_logdir": "./run_logs"
+    "tensorboard_logdir": "./run_logs",
 }
 
 
@@ -280,6 +285,7 @@ def simulate(data_config, generate_data_fn, experiment_config):
 
     return baseline_scores, manual_scores, attention_scores
 
+
 if __name__ == "__main__":
     import warnings
 
@@ -289,7 +295,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--variable",
-        choices=["op", "acc", "cov"],
+        choices=["sp", "acc", "cov"],
         help="variable we are varying in simulation",
     )
     parser.add_argument("--save-dir", type=str, help="where to save results")
@@ -314,7 +320,7 @@ if __name__ == "__main__":
         experiment_config["x_var"] = args.variable
     if args.save_dir:
         experiment_config["tensorboard_logdir"] = args.save_dir
-        
+
     # run simulations
     baseline_scores, manual_scores, attention_scores = simulate(
         data_config, generate_synthetic_data, experiment_config
@@ -330,8 +336,8 @@ if __name__ == "__main__":
     results_path = os.path.join(args.save_dir, f"{args.variable}-results.json")
     os.makedirs(args.save_dir, exist_ok=True)
     json.dump(results, open(results_path, "w"))
-    if args.variable == "op":
-        xlabel = "Overlap Proportion"
+    if args.variable == "sp":
+        xlabel = "Slice Proportion"
     elif args.variable == "acc":
         xlabel = "Head Accuracy"
     elif args.variable == "cov":
