@@ -7,7 +7,9 @@ import numpy as np
 
 def shuffle_matrices(matrices):
     """Shuffle each member of a list of matrices having the same first dimension
-    (along first dimension) according to the same shuffling order."""
+    (along first dimension) according to the same shuffling order.
+    """
+
     N = matrices[0].shape[0]
     idxs = list(range(N))
     shuffle(idxs)
@@ -19,7 +21,7 @@ def shuffle_matrices(matrices):
     return out
 
 
-def generate_multi_mode_data(n, mus, props, labels, variances):
+def generate_multi_mode_data(n, mus, props, labels, variances, mv_normal=True):
     """Generate multi-mode data
 
     Args:
@@ -41,19 +43,23 @@ def generate_multi_mode_data(n, mus, props, labels, variances):
     I_d = np.diag(np.ones(d))
 
     # Generate data
-    Xu = [
-        np.random.multivariate_normal(mu, I_d * var, size=ni)
-        for mu, ni, var in zip(mus, ns, variances)
-    ]
+    if mv_normal:
+        Xu = [
+            np.random.multivariate_normal(mu, I_d * var, size=ni)
+            for mu, ni, var in zip(mus, ns, variances)
+        ]
 
-    # Code for computing uniformly distributed circle as modes
-    #    Xu = []
-    #    for mu, ni, var in zip(mus, ns, variances):
-    #        length = np.sqrt(np.random.uniform(0, 1, ni)) * var
-    #        angle = np.pi * np.random.uniform(0, 2, ni) # cover full range from 0 to 2pi
-    #        x = length * np.cos(angle) + mu[0]
-    #        y = length * np.sin(angle) + mu[1]
-    #        Xu.append(np.vstack((x,y)).T)
+    else:
+        # Code for computing uniformly distributed circle as modes
+        Xu = []
+        for mu, ni, var in zip(mus, ns, variances):
+            length = np.sqrt(np.random.uniform(0, 1, ni)) * var
+            angle = np.pi * np.random.uniform(
+                0, 2, ni
+            )  # cover full range from 0 to 2pi
+            x = length * np.cos(angle) + mu[0]
+            y = length * np.sin(angle) + mu[1]
+            Xu.append(np.vstack((x, y)).T)
 
     Yu = [l * np.ones(ni) for ni, l in zip(ns, labels)]
     Cu = [i * np.ones(ni) for i, ni in enumerate(ns)]
@@ -86,6 +92,7 @@ def lf_slice_proportion_to_radius(target_sp, X, C, head_config, step_size=0.05):
     """ Naively estimate radius to achieve head slice / head slice + torso
      slice proportion
     """
+
     if target_sp == 0:
         return 0
 
@@ -242,6 +249,17 @@ def generate_imperfect_L(
 ):
     """ Generates imperfect L matrix with specified precision or recall 
     over the slice of interest.
+
+    Args:
+        N: num data points
+        X: [N, d] train data
+        C: [N, 1] identifies slice assignment of each datapoint
+        mus: [num_slices, 2] identifies slice centers
+        lf_metrics: [list of tuples] for each lf, specifies (metric, value)
+        head_config: dict of head config values for slice of interest
+
+    Returns:
+        L matrix [N, num_lfs]
     """
     m = len(accs)
 
@@ -355,34 +373,3 @@ def generate_synthetic_data(config, x_var=None, x_val=None):
     return X, Y, C, L
 
 
-def plot_slice_scores(results, slice_name="S2", xlabel="Overlap Proportion"):
-    baseline_scores = results["baseline"]
-    manual_scores = results["manual"]
-    attention_scores = results["attention"]
-    x_range = baseline_scores.keys()
-
-    # take average value across trials
-    baseline_collected = [
-        np.mean(np.array([s[slice_name] for s in baseline_scores[x]]))
-        for x in x_range
-    ]
-    manual_collected = [
-        np.mean(np.array([s[slice_name] for s in manual_scores[x]]))
-        for x in x_range
-    ]
-    attention_collected = [
-        np.mean(np.array([s[slice_name] for s in attention_scores[x]]))
-        for x in x_range
-    ]
-
-    # print x-axis in precision 2
-    x_range = ["%.2f" % float(x) for x in x_range]
-
-    plt.title(f"Accuracy on {slice_name} vs. {xlabel}")
-    plt.plot(x_range, baseline_collected, label="baseline")
-    plt.plot(x_range, manual_collected, label="manual")
-    plt.plot(x_range, attention_collected, label="attention")
-    plt.xlabel(xlabel)
-    plt.ylabel(f"Accuracy on {slice_name}")
-    plt.ylim(bottom=0, top=1)
-    plt.legend()

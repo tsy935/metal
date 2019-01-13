@@ -134,6 +134,7 @@ class SliceDPModel(EndModel):
         if self.config["verbose"]:
             print("Slice Heads:")
             print("Reweighting:", self.reweight)
+            print ("L_weights:", list(self.L_weights))
             print("Slice Weight:", self.slice_weight)
             print("Input Network:", self.network)
             print("L_head:", self.L_head)
