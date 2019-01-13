@@ -1,7 +1,33 @@
 import numpy as np
+from scipy.special import expit
 from termcolor import colored
 
 from metal.metrics import metric_score
+
+
+def generate_weak_labels(L_train, accs=None):
+    """ Combines L_train into weak labels either using accuracies of LFs or LabelModel.""" 
+    L_train_np = L_train.copy()
+
+    if accs is not None:
+        # Combine with weights computed from LF accuracies
+        w = np.log(accs / (1 - accs))
+        w[np.abs(w) == np.inf] = 0  # set weights from acc==0 to 0
+
+        # L_train_pt = torch.from_numpy(L_train.astype(np.float32))
+        L_train_np[L_train_np == 2] = -1
+        label_probs = expit(2 * L_train_np @ w).reshape(-1, 1)
+        Y_weak = np.concatenate((label_probs, 1 - label_probs), axis=1)
+    else:
+        print("Training MeTaL label model...")
+        from metal.label_model import LabelModel
+
+        label_model = LabelModel(k=2, seed=123)
+        L_train_np[L_train_np == -1] = 2
+        label_model.train_model(L_train_np, n_epochs=500, print_every=25)
+        Y_weak = label_model.predict_proba(L_train)
+
+    return Y_weak
 
 
 def compare_LF_slices(
