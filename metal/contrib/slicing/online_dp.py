@@ -75,10 +75,9 @@ class SliceDPModel(EndModel):
         # No bias-- only learn weights for L_head
         head_module = nn.Linear(self.r, self.m, bias=False)
 
-        # Initialize EndModel.
+        # default to removing nonlinearities from input_layer output
         input_layer_config = kwargs.get(
             "input_layer_config",
-            # default to removing nonlinearities from input_layer output
             {
                 "input_relu": False,
                 "input_batchnorm": False,
@@ -87,6 +86,7 @@ class SliceDPModel(EndModel):
         )
         kwargs["input_layer_config"] = input_layer_config
 
+        # Initialize EndModel.
         # Note: We overwrite `self.k` which conventionally refers to the
         # number of tasks to `self.m` which is the number of LFs in our setting.
         super().__init__(
@@ -138,6 +138,7 @@ class SliceDPModel(EndModel):
             print("Input Network:", self.network)
             print("L_head:", self.L_head)
             print("Y_head:", self.Y_head)
+            print("Criteria:", self.criteria)
 
     def _loss(self, X, L, Y_tilde=None):
         """Returns the loss consisting of summing the LF + DP head losses
@@ -202,52 +203,3 @@ class SliceDPModel(EndModel):
 
     def predict_proba(self, x):
         return F.softmax(self.forward_Y(x)).data.cpu().numpy()
-
-    def score_on_slice(
-        self,
-        data,
-        selected_idx,
-        metric=["f1"],
-        break_ties="random",
-        verbose=True,
-        **kwargs
-    ):
-        """Returns the slice-specific score as defined by given indexes.
-
-        Args:
-            data: a pytorch DataLoader, Dataset or tuple with Tensors (X,Y)
-            metric: A metric (string) with which to score performance or a list
-                of such metrics
-            verbose: The verbosity for this score method; it will not update the
-                class config
-
-        Returns:
-            scores: A (float) score of list of such scores if kwarg metric
-                is a list
-        """
-
-        # no overlap, return 1.0
-        if len(selected_idx) == 0:
-            scores = [1.0] * len(metric)
-
-        # otherwise, compute score at overlap
-        else:
-            # Filter preds/gt by selected_idx
-            Y_p, Y, Y_s = self._get_predictions(
-                data, break_ties=break_ties, return_probs=True, **kwargs
-            )
-            Y_p, Y, Y_s = Y_p[selected_idx], Y[selected_idx], Y_s[selected_idx]
-
-            # Evaluate on selected metrics
-            metric_list = metric if isinstance(metric, list) else [metric]
-            scores = []
-            for metric in metric_list:
-                score = metric_score(
-                    Y, Y_p, metric, probs=Y_s, ignore_in_gold=[0]
-                )
-                scores.append(score)
-
-        if isinstance(scores, list) and len(scores) == 1:
-            return scores[0]
-        else:
-            return scores
