@@ -88,7 +88,7 @@ def create_circular_slice(X, Y, C, h, k, r, slice_label):
     Y[circ_idx] = slice_label
 
 
-def lf_slice_proportion_to_radius(target_sp, X, C, head_config, step_size=0.05):
+def lf_slice_proportion_to_radius(target_sp, X, C, head_config, step_size=0.05, verbose=False):
     """ Naively estimate radius to achieve head slice / head slice + torso
      slice proportion
     """
@@ -110,12 +110,13 @@ def lf_slice_proportion_to_radius(target_sp, X, C, head_config, step_size=0.05):
 
         r += step_size
 
-    print(f"target op: {target_sp}, found op: {emp_sp}, found r: {r}")
+    if verbose:
+        print(f"target sp: {target_sp}, found sp: {emp_sp}, found r: {r}")
     return r
 
 
 def lf_circ_idx_for_slice_recall(
-    target_val, X, slice_mask, lf_center, step_size=0.01
+    target_val, X, slice_mask, lf_center, step_size=0.01, verbose=False
 ):
     """Identifies appropriate indexes to achieve target recall on 
     specified slice_idx. LFs will target in shape of circle."""
@@ -141,12 +142,13 @@ def lf_circ_idx_for_slice_recall(
         # increase radius
         r += step_size
 
-    print(f"target recall: {target_val}, found cov: {emp_recall}, found r: {r}")
+    if verbose:
+        print(f"target recall: {target_val}, found recall: {emp_recall}, found r: {r}")
     return circ_idx
 
 
 def lf_circ_idx_for_slice_precision(
-    target_val, X, slice_mask, lf_center, radius=1, step_size=0.01
+    target_val, X, slice_mask, lf_center, radius=1, step_size=0.01, verbose=False
 ):
     """Identifies appropriate indexes to achieve target precision on 
     specified slice_idx. LFs will target in shape of circle."""
@@ -175,9 +177,10 @@ def lf_circ_idx_for_slice_precision(
         # shift to left
         h -= step_size
 
-    print(
-        f"target precision: {target_val}, found cov: {emp_precision}, found r: {r}"
-    )
+    if verbose:
+        print(
+            f"target precision: {target_val}, found precision: {emp_precision}, found r: {r}"
+        )
     return circ_idx
 
 
@@ -301,7 +304,7 @@ def generate_imperfect_L(
     return L
 
 
-def generate_synthetic_data(config, x_var=None, x_val=None):
+def generate_synthetic_data(config, x_var=None, x_val=None, verbose=False):
     """ Generates synthetic data, overwriting default "x_var"
     in config with "x_val" if they are specified.
 
@@ -330,7 +333,7 @@ def generate_synthetic_data(config, x_var=None, x_val=None):
         # overwrite data points to create head slice
         # find radius for specified overlap proportion
         slice_radius = (
-            lf_slice_proportion_to_radius(x_val, X, C, config["head_config"])
+            lf_slice_proportion_to_radius(x_val, X, C, config["head_config"], verbose=verbose)
             if x_var == "sp"
             else config["head_config"]["r"]
         )

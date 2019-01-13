@@ -5,7 +5,7 @@ from termcolor import colored
 from metal.metrics import metric_score
 
 
-def generate_weak_labels(L_train, accs=None):
+def generate_weak_labels(L_train, accs=None, verbose=False):
     """ Combines L_train into weak labels either using accuracies of LFs or LabelModel.""" 
     L_train_np = L_train.copy()
 
@@ -19,12 +19,13 @@ def generate_weak_labels(L_train, accs=None):
         label_probs = expit(2 * L_train_np @ w).reshape(-1, 1)
         Y_weak = np.concatenate((label_probs, 1 - label_probs), axis=1)
     else:
-        print("Training MeTaL label model...")
+        if verbose:
+            print("Training MeTaL label model...")
         from metal.label_model import LabelModel
 
         label_model = LabelModel(k=2, seed=123)
         L_train_np[L_train_np == -1] = 2
-        label_model.train_model(L_train_np, n_epochs=500, print_every=25)
+        label_model.train_model(L_train_np, n_epochs=500, print_every=25, verbose=verbose)
         Y_weak = label_model.predict_proba(L_train)
 
     return Y_weak

@@ -1,6 +1,29 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+import pandas as pd
+from IPython.display import display
+
+def display_scores(scores, x_var, x_range):
+    scores = dict(scores)
+    
+    for x_val in x_range:
+        df_title = f"{x_var}: {x_val}"
+    
+        pd_scores = {}
+        for model_name, model_scores in scores.items():
+            S0 = np.mean([s['S0'] for s in model_scores[x_val]])
+            S1 = np.mean([s['S1'] for s in model_scores[x_val]])
+            S2 = np.mean([s['S2'] for s in model_scores[x_val]])
+            overall = np.mean([s['overall'] for s in model_scores[x_val]])    
+            mean_scores = {'S0':S0, 'S1':S1, 'S2':S2, 'overall':overall}
+
+            pd_scores[model_name] = mean_scores
+    
+        df = pd.DataFrame.from_dict(pd_scores)
+        df.index.name = df_title
+        display(df)
+
 def visualize_data(X, Y, C, L):
     # show data by class
     plt.figure(figsize=(8, 8))
@@ -43,23 +66,33 @@ def visualize_data(X, Y, C, L):
     plt.legend()
     plt.show()
 
-def plot_slice_scores(results, slice_name="S2", xlabel="Overlap Proportion"):
-    for model_name, model_scores in results.items(): 
-        x_range = model_scores.keys()
-    
-        # take average value across trials
-        scores_collected = [
-            np.mean(np.array([s[slice_name] for s in model_scores[x]]))
-            for x in x_range
-        ]
+def plot_slice_scores(results, xlabel="Overlap Proportion", custom_ylims={}):
+    plt.figure(figsize=(10, 10))
+    slice_names = ["S0", "S1", "S2", "overall"]
+    for i, slice_name in enumerate(slice_names):
+        plt.subplot(2, 2, i+1)
 
-        plt.plot(x_range, scores_collected, label=model_name)
+        for model_name, model_scores in results.items(): 
+            x_range = model_scores.keys()
+        
+            # take average value across trials
+            scores_collected = [
+                np.mean(np.array([s[slice_name] for s in model_scores[x]]))
+                for x in x_range
+            ]
     
-    # print x-axis in precision 2
-    x_range = ["%.2f" % float(x) for x in x_range]
-
-    plt.title(f"Accuracy on {slice_name} vs. {xlabel}")
-    plt.xlabel(xlabel)
-    plt.ylabel(f"Accuracy on {slice_name}")
-    plt.ylim(bottom=0, top=1)
-    plt.legend()
+            plt.plot(x_range, scores_collected, label=model_name)
+        
+        # print x-axis in precision 2
+        x_range = ["%.2f" % float(x) for x in x_range]
+    
+        plt.title(f"Accuracy on {slice_name} vs. {xlabel}")
+        plt.xlabel(xlabel)
+        plt.ylabel(f"Accuracy on {slice_name}")
+        custom_ylim = custom_ylims.get(slice_name, None)
+        if custom_ylim:
+            plt.ylim(bottom=custom_ylim[0], top=custom_ylim[1])
+        else:
+            plt.ylim(bottom=0, top=1)
+        plt.legend()
+    plt.show()

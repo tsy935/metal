@@ -18,8 +18,19 @@ import pandas as pd
 import torch
 from synthetics_utils import generate_synthetic_data
 from visualization_utils import plot_slice_scores
-from tqdm import tqdm
 
+# Import tqdm_notebook if in Jupyter notebook
+try:
+    from IPython import get_ipython
+
+    if "IPKernelApp" not in get_ipython().config:
+        raise ImportError("console")
+except (AttributeError, ImportError):
+    from tqdm import tqdm
+else:
+    from tqdm import tqdm_notebook as tqdm
+
+from metal.end_model import EndModel
 from metal.contrib.logging.tensorboard import TensorBoardWriter
 from metal.contrib.slicing.experiment_utils import generate_weak_labels
 from metal.contrib.slicing.online_dp import (
@@ -43,9 +54,9 @@ data_config = {
     "props": [0.25, 0.75],  # proportion of data in each mode
     "variances": [3, 5],  # proportion of data in each mode
     "head_config": {
-        "h": 4,  # horizontal shift of slice
-        "k": 0,  # vertical shift of slice
-        "r": 1,  # radius of slice
+        "h": 5,  # horizontal shift of slice
+        "k": -2.5,  # vertical shift of slice
+        "r": 1.8,  # radius of slice
         "slice_label": -1,
     },
     "accs": np.array([0.9, 0.9, 0.9]),  # default accuracy of LFs
@@ -74,10 +85,83 @@ experiment_config = {
         "lr": 0.005,
         "checkpoint_runway": 5,
     },
-    "verbose": True,
+    "verbose": False,
     "train_prop": 0.8,
     "use_weak_labels_from_gen_model": False,
     "tensorboard_logdir": "./run_logs",
+}
+
+model_configs = {
+    "EndModel": {
+        "base_model_class" : EndModel,
+        "input_module_class": MLPModule,
+        "input_module_init_kwargs": {
+            'input_dim': 2,
+            'middle_dims': [10, 10],
+            'bias': True,
+            'output_dim': 10
+         },
+        "base_model_init_kwargs": {
+            "layer_out_dims": [10, 2],
+            "input_layer_config": {
+                "input_relu": False,
+                "input_batchnorm": False, 
+                "input_dropout": 0.0,
+            }
+        },
+        "train_on_L": False
+    },
+    "UniformModel": {
+        "base_model_class" : SliceDPModel,
+        "base_model_init_kwargs": {
+            "reweight": False,
+            "r": 10,
+            "slice_weight": 0.5,
+            "L_weights": np.array([1., 1., 1.]).astype(np.float32)
+        },
+        "input_module_class": MLPModule,
+        "input_module_init_kwargs": {
+            'input_dim': 2,
+            'middle_dims': [10, 10],
+            'bias': True,
+            'output_dim': 10
+         },
+        "train_on_L": True
+    },
+    "ManualModel": {
+        "base_model_class" : SliceDPModel,
+        "base_model_init_kwargs": {
+            "reweight": False,
+            "r": 10,
+            "slice_weight": 0.5,
+            "L_weights": np.array([1., 1., 2.]).astype(np.float32) # LF2 w/ 2x weight
+        },
+        "input_module_class": MLPModule,
+        "input_module_init_kwargs": {
+            'input_dim': 2,
+            'middle_dims': [10, 10],
+            'bias': True,
+            'output_dim': 10
+         },
+        "train_on_L": True
+    },
+    "AttentionModel": {
+        "base_model_class" : SliceDPModel,
+        "base_model_init_kwargs": {
+            "reweight": True,
+            "r": 10,
+            "slice_weight": 0.5,
+            "L_weights": None
+        },
+        "input_module_class": MLPModule,
+        "input_module_init_kwargs": {
+            'input_dim': 2,
+            'middle_dims': [10, 10],
+            'bias': True,
+            'output_dim': 10
+         },
+        "train_on_L": True,
+    }
 }
 
 
@@ -114,6 +198,7 @@ def train_models(
             print("-" * 10, f"Training {model_name}", "-" * 10)
         base_model_class = config["base_model_class"]
         base_model_init_kwargs = config["base_model_init_kwargs"]
+        base_model_init_kwargs.update({"accs": accs})
         input_module_class = config["input_module_class"]
         input_module_init_kwargs = config["input_module_init_kwargs"]
 
@@ -230,9 +315,9 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
                 logdir = os.path.join(logdir, f"{var_name}_{x}")
 
             if experiment_config["use_weak_labels_from_gen_model"]:
-                Y_weak = generate_weak_labels(L_train)
+                Y_weak = generate_weak_labels(L_train, verbose=experiment_config["verbose"])
             else:
-                Y_weak = generate_weak_labels(L_train, data_config["accs"])
+                Y_weak = generate_weak_labels(L_train, data_config["accs"], verbose=experiment_config["verbose"])
 
             trained_models = train_models(
                 X_train,
