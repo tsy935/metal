@@ -8,6 +8,7 @@ python simulate.py --var cov --save-dir results/test --n 50 --x-range 0.6 0.7 0.
 import argparse
 import json
 import os
+import random
 import sys
 from collections import defaultdict
 from time import strftime, time
@@ -17,7 +18,7 @@ import numpy as np
 import pandas as pd
 import torch
 from synthetics_utils import generate_synthetic_data
-from visualization_utils import plot_slice_scores
+from visualization_utils import plot_slice_scores, visualize_data
 
 # Import tqdm_notebook if in Jupyter notebook
 try:
@@ -56,14 +57,14 @@ data_config = {
     "head_config": {
         "h": 5,  # horizontal shift of slice
         "k": -2.5,  # vertical shift of slice
-        "r": 1.8,  # radius of slice
+        "r": 1.,  # radius of slice
         "slice_label": -1,
     },
-    "accs": np.array([0.9, 0.9, 0.9]),  # default accuracy of LFs
+    "accs": np.array([0.95, 0.95, 0.95]),  # default accuracy of LFs
     "covs": [
-        ("recall", 0.9),
-        ("recall", 0.9),
-        ("recall", 0.9),
+        ("recall", 0.95),
+        ("recall", 0.95),
+        ("recall", 0.95),
     ],  # coverage of LFs, as define by prec., rec.
 }
 
@@ -89,6 +90,7 @@ experiment_config = {
     "train_prop": 0.8,
     "use_weak_labels_from_gen_model": False,
     "tensorboard_logdir": "./run_logs",
+    "seed": False
 }
 
 model_configs = {
@@ -134,7 +136,7 @@ model_configs = {
             "reweight": False,
             "r": 10,
             "slice_weight": 0.5,
-            "L_weights": np.array([1., 1., 2.]).astype(np.float32) # LF2 w/ 2x weight
+            "L_weights": np.array([1., 1., 5.]).astype(np.float32) # LF2 w/ 5x weight
         },
         "input_module_class": MLPModule,
         "input_module_init_kwargs": {
@@ -229,7 +231,6 @@ def train_models(
             train_data,
             dev_data=test_data,
             log_writer=log_writer,
-            verbose=verbose,
             **train_kwargs,
         )
 
@@ -273,6 +274,9 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
     Returns: dict with simulation scores in format:
         {model_name: {parameter_name: [score_for_trial_i]}}
     """
+    if experiment_config.get("seed", False):
+        np.random.seed(experiment_config["seed"])
+        random.seed(experiment_config["seed"])
 
     # to collect scores for all models
     scores = defaultdict(
@@ -284,13 +288,18 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
     x_range = experiment_config["x_range"]
     var_name = experiment_config["x_var"]
 
+    if var_name == None:
+        x_range = [None]
+
     # for each value, run num_trials simulations
     for x in x_range:
         print(f"Simulating: {var_name}={x}")
         for _ in tqdm(range(num_trials)):
 
             # generate data
-            X, Y, C, L = generate_data_fn(data_config, var_name, x)
+            X, Y, C, L = generate_data_fn(data_config, var_name, x, verbose=experiment_config["verbose"])
+            if experiment_config.get("visualize_data", False):
+                visualize_data(X, Y, C, L)
 
             # convert to multiclass labels
             if -1 in Y:
@@ -356,7 +365,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--variable",
-        choices=["sp", "acc", "cov"],
+        choices=["sp", "acc", "cov.recall", "cov.precision"],
         help="variable we are varying in simulation",
     )
     parser.add_argument("--save-dir", type=str, help="where to save results")
@@ -370,6 +379,12 @@ if __name__ == "__main__":
         default=None,
         help="range of values to scan over",
     )
+    parser.add_argument(
+        "--radius",
+        type=float,
+        default=None,
+        help="radius of slice head",
+    )
     args = parser.parse_args()
 
     # override simulation config
@@ -381,18 +396,15 @@ if __name__ == "__main__":
         experiment_config["x_var"] = args.variable
     if args.save_dir:
         experiment_config["tensorboard_logdir"] = args.save_dir
+    if args.radius:
+        data_config["head_config"]["r"] = args.radius
 
     # run simulations
-    baseline_scores, manual_scores, attention_scores = simulate(
-        data_config, generate_synthetic_data, experiment_config
+    results = simulate(
+        data_config, generate_synthetic_data, experiment_config, model_configs
     )
 
     # save scores and plot
-    results = {
-        "baseline": dict(baseline_scores),
-        "manual": dict(manual_scores),
-        "attention": dict(attention_scores),
-    }
     print(f"Saving to {args.save_dir}")
     results_path = os.path.join(args.save_dir, f"{args.variable}-results.json")
     os.makedirs(args.save_dir, exist_ok=True)
@@ -401,16 +413,10 @@ if __name__ == "__main__":
         xlabel = "Slice Proportion"
     elif args.variable == "acc":
         xlabel = "Head Accuracy"
-    elif args.variable == "cov":
-        xlabel = "Head Coverage"
+    elif args.variable == "cov.recall":
+        xlabel = "Head Recall"
+    elif args.variable == "cov.precision":
+        xlabel = "Head Precision"
 
-    plt.figure(figsize=(10, 10))
-    plt.subplot(2, 2, 1)
-    plot_slice_scores(results, "S2", xlabel=xlabel)
-    plt.subplot(2, 2, 2)
-    plot_slice_scores(results, "S1", xlabel=xlabel)
-    plt.subplot(2, 2, 3)
-    plot_slice_scores(results, "S0", xlabel=xlabel)
-    plt.subplot(2, 2, 4)
-    plot_slice_scores(results, "overall", xlabel=xlabel)
-    plt.savefig(os.path.join(args.save_dir, "results.png"))
+    plot_slice_scores(results, xlabel=xlabel, savedir=args.save_dir)
+

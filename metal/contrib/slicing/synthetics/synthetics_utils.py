@@ -68,7 +68,7 @@ def generate_multi_mode_data(n, mus, props, labels, variances, mv_normal=True):
     return shuffle_matrices([np.vstack(Xu), np.hstack(Yu), np.hstack(Cu)])
 
 
-def create_circular_slice(X, Y, C, h, k, r, slice_label):
+def create_circular_slice(X, Y, C, h, k, r, slice_label, lf_num=None):
     """ Given generated data, creates a slice  (represented by 2D circle)
     by assigning all points within circle of specified location/size
     to this slice rom 1 --> 2 in-place.
@@ -84,7 +84,7 @@ def create_circular_slice(X, Y, C, h, k, r, slice_label):
     """
 
     circ_idx = np.sqrt((X[:, 0] - h) ** 2 + (X[:, 1] - k) ** 2) < r
-    C[circ_idx] = 2
+    C[circ_idx] = lf_num
     Y[circ_idx] = slice_label
 
 
@@ -126,7 +126,6 @@ def lf_circ_idx_for_slice_recall(
         return np.zeros(len(X), dtype=bool)
 
     h, k = lf_center
-
     emp_recall = -1
 
     # shift circle to the left until precision decreases to desired amount
@@ -148,7 +147,7 @@ def lf_circ_idx_for_slice_recall(
 
 
 def lf_circ_idx_for_slice_precision(
-    target_val, X, slice_mask, lf_center, radius=1, step_size=0.01, verbose=False
+    target_val, X, slice_mask, lf_center, radius, step_size=0.01, verbose=False
 ):
     """Identifies appropriate indexes to achieve target precision on 
     specified slice_idx. LFs will target in shape of circle."""
@@ -185,7 +184,7 @@ def lf_circ_idx_for_slice_precision(
 
 
 def update_L_to_target_slice(
-    L, X, C, target_metric, target_val, lf_num, acc, center, slice_label
+    L, X, C, target_metric, target_val, lf_num, acc, center, slice_radius, slice_label
 ):
     """ Updates L matrix in place to target slice with specified precision/lf score.
     
@@ -198,6 +197,7 @@ def update_L_to_target_slice(
         lf_num: [int] index i for \lamdba_i targeting \slice_i
         acc: [float] accuracy of this LF
         center: [tuple of floats]] (x, y) coordinates slice
+        slice_radius: [float] default size of slice radius
         slice_label: [int] either +1/-1 for label to assign the slice
     """
     assert target_metric in ["precision", "recall"]
@@ -207,12 +207,13 @@ def update_L_to_target_slice(
     # set LF values based on circle that satisfies target metric (ex 0.7 precision)
     if target_metric == "precision":
         lf_idx = lf_circ_idx_for_slice_precision(
-            target_val, X, C == lf_num, center
+            target_val, X, C == lf_num, center, radius=slice_radius
         )
     elif target_metric == "recall":
         lf_idx = lf_circ_idx_for_slice_recall(
             target_val, X, C == lf_num, center
         )
+
     L[lf_idx, lf_num] = slice_label
 
     # set some labels incorrectly (-slice_label) based on accuracy
@@ -282,6 +283,7 @@ def generate_imperfect_L(
             lf_num=lf_num,
             acc=accs[lf_num],
             center=tuple(mus[lf_num]),
+            slice_radius=None,
             slice_label=labels[lf_num],
         )
 
@@ -298,6 +300,7 @@ def generate_imperfect_L(
             lf_num=lf_num,
             acc=accs[lf_num],
             center=(head_config["h"], head_config["k"]),
+            slice_radius=head_config["r"],
             slice_label=head_config["slice_label"],
         )
 
@@ -346,6 +349,7 @@ def generate_synthetic_data(config, x_var=None, x_val=None, verbose=False):
             k=config["head_config"]["k"],
             r=slice_radius,
             slice_label=config["head_config"]["slice_label"],
+            lf_num = 2
         )
 
     # labeling function generation
@@ -370,7 +374,7 @@ def generate_synthetic_data(config, x_var=None, x_val=None, verbose=False):
             config["mus"],
             config["labels"],
             config["covs"],
-            config["head_config"],
+            config["head_config"]
         )
 
     return X, Y, C, L
