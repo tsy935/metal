@@ -7,7 +7,9 @@ import numpy as np
 
 def shuffle_matrices(matrices):
     """Shuffle each member of a list of matrices having the same first dimension
-    (along first dimension) according to the same shuffling order."""
+    (along first dimension) according to the same shuffling order.
+    """
+
     N = matrices[0].shape[0]
     idxs = list(range(N))
     shuffle(idxs)
@@ -19,7 +21,7 @@ def shuffle_matrices(matrices):
     return out
 
 
-def generate_multi_mode_data(n, mus, props, labels, variances):
+def generate_multi_mode_data(n, mus, props, labels, variances, mv_normal=True):
     """Generate multi-mode data
 
     Args:
@@ -41,10 +43,24 @@ def generate_multi_mode_data(n, mus, props, labels, variances):
     I_d = np.diag(np.ones(d))
 
     # Generate data
-    Xu = [
-        np.random.multivariate_normal(mu, I_d * var, size=ni)
-        for mu, ni, var in zip(mus, ns, variances)
-    ]
+    if mv_normal:
+        Xu = [
+            np.random.multivariate_normal(mu, I_d * var, size=ni)
+            for mu, ni, var in zip(mus, ns, variances)
+        ]
+
+    else:
+        # Code for computing uniformly distributed circle as modes
+        Xu = []
+        for mu, ni, var in zip(mus, ns, variances):
+            length = np.sqrt(np.random.uniform(0, 1, ni)) * var
+            angle = np.pi * np.random.uniform(
+                0, 2, ni
+            )  # cover full range from 0 to 2pi
+            x = length * np.cos(angle) + mu[0]
+            y = length * np.sin(angle) + mu[1]
+            Xu.append(np.vstack((x, y)).T)
+
     Yu = [l * np.ones(ni) for ni, l in zip(ns, labels)]
     Cu = [i * np.ones(ni) for i, ni in enumerate(ns)]
 
@@ -53,9 +69,9 @@ def generate_multi_mode_data(n, mus, props, labels, variances):
 
 
 def create_circular_slice(X, Y, C, h, k, r, slice_label):
-    """ Given generated data, creates a slice (represented by 2D circle)
+    """ Given generated data, creates a slice  (represented by 2D circle)
     by assigning all points within circle of specified location/size
-    to this slice rom 1 --> 2.
+    to this slice rom 1 --> 2 in-place.
 
     Args:
         - X: [2 x d-dim array] Data points
@@ -68,41 +84,149 @@ def create_circular_slice(X, Y, C, h, k, r, slice_label):
     """
 
     circ_idx = np.sqrt((X[:, 0] - h) ** 2 + (X[:, 1] - k) ** 2) < r
-    # circ_idx = np.logical_and(circ_idx, C==1)
     C[circ_idx] = 2
     Y[circ_idx] = slice_label
 
 
-def overlap_proportion_to_slice_radius(target_op, config, step_size=0.05):
-    # naively estimate radius to achieve overlap proportion
-    if target_op == 0:
+def lf_slice_proportion_to_radius(target_sp, X, C, head_config, step_size=0.05, verbose=False):
+    """ Naively estimate radius to achieve head slice / head slice + torso
+     slice proportion
+    """
+
+    if target_sp == 0:
         return 0
 
-    import copy
+    h = head_config["h"]
+    k = head_config["k"]
 
-    config_copy = copy.deepcopy(config)
-
-    emp_op = -1
+    # increase radius of slice until slice proportion reaches target
+    emp_sp = -1
     r = 0
-    while emp_op < target_op:
-        config_copy["head_config"]["r"] = r
-        X, Y, C, L = generate_synthetic_data(config_copy)
-        emp_op = np.sum(C == 2) / np.sum(np.logical_or(C == 1, C == 2))
+    while emp_sp < target_sp:
+        circ_idx = np.sqrt((X[:, 0] - h) ** 2 + (X[:, 1] - k) ** 2) < r
+
+        # num points in S2 / num points in S1 or S2
+        emp_sp = np.sum(circ_idx) / np.sum(np.logical_or(C == 1, C == 2))
+
         r += step_size
 
-    print(f"target op: {target_op}, found op: {emp_op}, found r: {r}")
+    if verbose:
+        print(f"target sp: {target_sp}, found sp: {emp_sp}, found r: {r}")
     return r
 
 
-def generate_label_matrix(n, accs, covs, Y, C):
+def lf_circ_idx_for_slice_recall(
+    target_val, X, slice_mask, lf_center, step_size=0.01, verbose=False
+):
+    """Identifies appropriate indexes to achieve target recall on 
+    specified slice_idx. LFs will target in shape of circle."""
+
+    # ensure there are some elements specified in slice
+    if np.sum(slice_mask) == 0:
+        return np.zeros(len(X), dtype=bool)
+
+    h, k = lf_center
+
+    emp_recall = -1
+
+    # shift circle to the left until precision decreases to desired amount
+    r = 0
+    circ_idx = np.array([])
+    while emp_recall < target_val:
+        circ_idx = np.sqrt((X[:, 0] - h) ** 2 + (X[:, 1] - k) ** 2) < r
+        # LF recall = LF votes AND vote in slice / total in slice
+        emp_recall = np.sum(np.logical_and(circ_idx, slice_mask)) / np.sum(
+            slice_mask
+        )
+
+        # increase radius
+        r += step_size
+
+    if verbose:
+        print(f"target recall: {target_val}, found recall: {emp_recall}, found r: {r}")
+    return circ_idx
+
+
+def lf_circ_idx_for_slice_precision(
+    target_val, X, slice_mask, lf_center, radius=1, step_size=0.01, verbose=False
+):
+    """Identifies appropriate indexes to achieve target precision on 
+    specified slice_idx. LFs will target in shape of circle."""
+
+    assert (
+        np.sum(slice_mask) > 0
+    )  # ensure there are some elements specified in slice
+
+    if target_val == 0:
+        return 0
+
+    h, k = lf_center
+
+    emp_precision = np.inf
+    r = radius
+    circ_idx = np.array([])
+
+    # shift circle to the left until precision decreases to desired amount
+    while emp_precision > target_val:
+        circ_idx = np.sqrt((X[:, 0] - h) ** 2 + (X[:, 1] - k) ** 2) < r
+        # LF recall = LF votes AND vote in slice / total in LF2
+        emp_precision = np.sum(np.logical_and(circ_idx, slice_mask)) / np.sum(
+            circ_idx
+        )
+
+        # shift to left
+        h -= step_size
+
+    if verbose:
+        print(
+            f"target precision: {target_val}, found precision: {emp_precision}, found r: {r}"
+        )
+    return circ_idx
+
+
+def update_L_to_target_slice(
+    L, X, C, target_metric, target_val, lf_num, acc, center, slice_label
+):
+    """ Updates L matrix in place to target slice with specified precision/lf score.
+    
+    Args:
+        L: [N x num_lfs] label matrix that will be updated in place 
+        X: [N x d] all data points
+        C: [N x 1] slice num for each data point
+        target_metric: [string] either precision or recall of LF over slice
+        target_val: [float] precision or recall value that you want to target
+        lf_num: [int] index i for \lamdba_i targeting \slice_i
+        acc: [float] accuracy of this LF
+        center: [tuple of floats]] (x, y) coordinates slice
+        slice_label: [int] either +1/-1 for label to assign the slice
+    """
+    assert target_metric in ["precision", "recall"]
+
+    N = X.shape[0]
+
+    # set LF values based on circle that satisfies target metric (ex 0.7 precision)
+    if target_metric == "precision":
+        lf_idx = lf_circ_idx_for_slice_precision(
+            target_val, X, C == lf_num, center
+        )
+    elif target_metric == "recall":
+        lf_idx = lf_circ_idx_for_slice_recall(
+            target_val, X, C == lf_num, center
+        )
+    L[lf_idx, lf_num] = slice_label
+
+    # set some labels incorrectly (-slice_label) based on accuracy
+    wrong_mask = np.random.random(N) > acc
+    L[np.logical_and(wrong_mask, lf_idx), lf_num] = -slice_label
+
+
+def generate_perfect_cov_L(N, accs, Y, C):
     """Generate label matrix. We assume that the last LF is the head LF and the
     one before it is the torso LF it will interact with.
 
     Args:
-        - n: [int] Number of data points
+        - N: [int] Number of data points
         - accs: [list of floats] accuracies of LFs
-        #TODO: covs isn't the overall coverage, but coverage on the associated mode
-        - covs: [list of floats] coverage for each LF for its mode
         - Y: [n-dim array] Data labels
         - C: [n-dim array] Index of the mode each data point belongs to
 
@@ -112,25 +236,81 @@ def generate_label_matrix(n, accs, covs, Y, C):
     m = np.shape(accs)[0]
 
     # Construct a label matrix with given accs and covs
-    L = np.zeros((n, m))
-    for i in range(n):
+    L = np.zeros((N, m))
+    for i in range(N):
         j = int(C[i])  # slice
-        if np.random.random() < covs[j]:
-            if np.random.random() < accs[j]:
-                L[i, j] = Y[i]
-            else:
-                L[i, j] = -Y[i]
+        if np.random.random() < accs[j]:
+            L[i, j] = Y[i]
+        else:
+            L[i, j] = -Y[i]
 
     return L
 
 
-def generate_synthetic_data(config, x_var=None, x_val=None):
+def generate_imperfect_L(
+    N, X, C, accs, mus, labels, lf_metrics, head_config=None
+):
+    """ Generates imperfect L matrix with specified precision or recall 
+    over the slice of interest.
+
+    Args:
+        N: num data points
+        X: [N, d] train data
+        C: [N, 1] identifies slice assignment of each datapoint
+        mus: [num_slices, 2] identifies slice centers
+        lf_metrics: [list of tuples] for each lf, specifies (metric, value)
+        head_config: dict of head config values for slice of interest
+
+    Returns:
+        L matrix [N, num_lfs]
+    """
+    m = len(accs)
+
+    # init L matrix
+    L = np.zeros((N, m))
+
+    # update L matrix based on config settings for "normal" (non circular slice) LFs
+    num_normal_lfs = len(labels)
+    for lf_num in range(num_normal_lfs):
+        target_metric, target_val = lf_metrics[lf_num]
+        update_L_to_target_slice(
+            L,
+            X,
+            C,
+            target_metric,
+            target_val,
+            lf_num=lf_num,
+            acc=accs[lf_num],
+            center=tuple(mus[lf_num]),
+            slice_label=labels[lf_num],
+        )
+
+    # update L matrix for circular slice "head"
+    if head_config:
+        lf_num = m - 1
+        target_metric, target_val = lf_metrics[lf_num]
+        update_L_to_target_slice(
+            L,
+            X,
+            C,
+            target_metric,
+            target_val,
+            lf_num=lf_num,
+            acc=accs[lf_num],
+            center=(head_config["h"], head_config["k"]),
+            slice_label=head_config["slice_label"],
+        )
+
+    return L
+
+
+def generate_synthetic_data(config, x_var=None, x_val=None, verbose=False):
     """ Generates synthetic data, overwriting default "x_var"
     in config with "x_val" if they are specified.
 
     Args:
         config: with default data generation values
-        x_var: variable to override, in {"op", "acc", "cov"}
+        x_var: variable to override, in {"sp", "acc", "cov"}
         x_val value to override variable with
 
     Returns:
@@ -139,7 +319,7 @@ def generate_synthetic_data(config, x_var=None, x_val=None):
         C: slice assignment in {0, 1, 2}
         L: generated label matrix (n x 2)
     """
-    assert x_var in ["op", "acc", "cov", None]
+    assert x_var in ["sp", "acc", "cov.precision", "cov.recall", None]
 
     X, Y, C = generate_multi_mode_data(
         config["N"],
@@ -153,8 +333,8 @@ def generate_synthetic_data(config, x_var=None, x_val=None):
         # overwrite data points to create head slice
         # find radius for specified overlap proportion
         slice_radius = (
-            overlap_proportion_to_slice_radius(x_val, config)
-            if x_var == "op"
+            lf_slice_proportion_to_radius(x_val, X, C, config["head_config"], verbose=verbose)
+            if x_var == "sp"
             else config["head_config"]["r"]
         )
 
@@ -169,60 +349,30 @@ def generate_synthetic_data(config, x_var=None, x_val=None):
         )
 
     # labeling function generation
-
     accs = config["accs"]
     if x_var == "acc":
         accs[-1] = x_val  # vary head lf (last index) accuracy
 
     covs = config["covs"]
-    if x_var == "cov":
-        covs[-1] = x_val  # vary head lf (last index) coverage over slice
+    if x_var and x_var.startswith("cov"):
+        x_var, metric = tuple(x_var.split("."))  # splits to (cov, precision)
+        assert metric in ["precision", "recall"]
+        covs[-1] = (metric, x_val)
 
-    L = generate_label_matrix(config["N"], accs, covs, Y, C)
-
-    # labeling function generation
-
-    accs = config["accs"]
-    if x_var == "acc":
-        accs[-1] = x_val  # vary head lf (last index) accuracy
-
-    covs = config["covs"]
-    if x_var == "cov":
-        covs[-1] = x_val  # vary head lf (last index) coverage over slice
-
-    L = generate_label_matrix(config["N"], accs, covs, Y, C)
+    if config.get("perfect_cov", False):
+        L = generate_perfect_cov_L(config["N"], accs, Y, C)
+    else:
+        L = generate_imperfect_L(
+            config["N"],
+            X,
+            C,
+            accs,
+            config["mus"],
+            config["labels"],
+            config["covs"],
+            config["head_config"],
+        )
 
     return X, Y, C, L
 
 
-def plot_slice_scores(results, slice_name="S2", xlabel="Overlap Proportion"):
-    baseline_scores = results["baseline"]
-    manual_scores = results["manual"]
-    attention_scores = results["attention"]
-    x_range = baseline_scores.keys()
-
-    # take average value across trials
-    baseline_collected = [
-        np.mean(np.array([s[slice_name] for s in baseline_scores[x]]))
-        for x in x_range
-    ]
-    manual_collected = [
-        np.mean(np.array([s[slice_name] for s in manual_scores[x]]))
-        for x in x_range
-    ]
-    attention_collected = [
-        np.mean(np.array([s[slice_name] for s in attention_scores[x]]))
-        for x in x_range
-    ]
-
-    # print x-axis in precision 2
-    x_range = ["%.2f" % float(x) for x in x_range]
-
-    plt.title(f"Accuracy on {slice_name} vs. {xlabel}")
-    plt.plot(x_range, baseline_collected, label="baseline")
-    plt.plot(x_range, manual_collected, label="manual")
-    plt.plot(x_range, attention_collected, label="attention")
-    plt.xlabel(xlabel)
-    plt.ylabel(f"Accuracy on {slice_name}")
-    plt.ylim(bottom=0, top=1)
-    plt.legend()
