@@ -155,7 +155,8 @@ class SliceDPModel(EndModel):
         # LF heads loss
         # NOTE: we mask the loss with abs of L with terms {-1, 0, 1}
         # So, only backprop if an LF voted
-        masked_loss_1 = self.criteria(self.forward_L(X), L_01) * abs(L)
+        L_head_mask = abs(L)
+        masked_loss_1 = self.criteria(self.forward_L(X), L_01) * L_head_mask
 
         loss_1 = torch.mean(
             masked_loss_1 @ self.L_weights
@@ -168,7 +169,9 @@ class SliceDPModel(EndModel):
             label_probs = F.sigmoid(2 * L @ self.w).reshape(-1, 1)
             Y_tilde = torch.cat((label_probs, 1 - label_probs), dim=1)
 
-        loss_2 = torch.mean(self.criteria(self.forward_Y(X), Y_tilde))
+        dp_head_mask = (torch.sum(abs(L), dim=1) > 0).unsqueeze(1).repeat(1, 2).float()
+        masked_loss_2 = self.criteria(self.forward_Y(X), Y_tilde) * dp_head_mask
+        loss_2 = torch.mean(masked_loss_2)
 
         # Compute the weighted sum of these
         loss_1 /= self.m  # normalize by number of LFs
