@@ -189,9 +189,15 @@ class SliceDPModel(EndModel):
 
             # A is the [batch_size, 1, m] Tensor representing the relative
             # "confidence" of each LF on each example
-            # NOTE: Should we be taking an absolute value / centering somewhere
-            # before here to capture the "confidence" vs. prediction...?
+            # NOTE: Taking an absolute value / centering somewhere to capture the 
+            # "confidence" (not prediction)
             A = F.softmax(abs(self.forward_L(x))).unsqueeze(1)
+
+            # Create an explicit mask for the predicted label
+            # Set the max indexes in dim m of A [batch_size, 1, m] to 1. else 0.
+            max_idx = torch.max(A, dim=2, keepdim=True)[1]
+            mask = torch.zeros(A.shape).scatter_(2, max_idx, True)
+            A = A * mask
 
             # We then project the A weighting onto the respective features of
             # the L_head layer, and add these attention-weighted features to Xr
