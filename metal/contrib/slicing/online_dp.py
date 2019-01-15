@@ -148,11 +148,17 @@ class SliceDPModel(EndModel):
             - X: A [batch_size, d] torch Tensor
             - L: A [batch_size, m] torch Tensor with elements in {-1,0,1}
         """
-        L_01 = (L + 1) / 2
-        # LF heads loss
+
         # NOTE: Here, we add *all* data points (incl. abstains) to the loss
+        L_01 = (L + 1) / 2
+
+        # LF heads loss
+        # NOTE: we mask the loss with abs of L with terms {-1, 0, 1}
+        # So, only backprop if an LF voted
+        masked_loss_1 = self.criteria(self.forward_L(X), L_01) * abs(L)
+
         loss_1 = torch.mean(
-            self.criteria(self.forward_L(X), L_01) @ self.L_weights
+            masked_loss_1 @ self.L_weights
         )
 
         # TODO: Calculate Y_tilde once and save; don't recalculate
@@ -166,7 +172,8 @@ class SliceDPModel(EndModel):
 
         # Compute the weighted sum of these
         loss_1 /= self.m  # normalize by number of LFs
-        return (self.slice_weight * loss_1) + ((1 - self.slice_weight) * loss_2)
+        loss = (self.slice_weight * loss_1) + ((1 - self.slice_weight) * loss_2)
+        return loss * 100
 
     def _get_loss_fn(self):
         """ Override `EndModel` loss function with custom L_head + Y_head loss"""
@@ -192,12 +199,6 @@ class SliceDPModel(EndModel):
             # NOTE: Taking an absolute value / centering somewhere to capture the 
             # "confidence" (not prediction)
             A = F.softmax(abs(self.forward_L(x))).unsqueeze(1)
-
-            # Create an explicit mask for the predicted label
-            # Set the max indexes in dim m of A [batch_size, 1, m] to 1. else 0.
-            max_idx = torch.max(A, dim=2, keepdim=True)[1]
-            mask = torch.zeros(A.shape).scatter_(2, max_idx, True)
-            A = A * mask
 
             # We then project the A weighting onto the respective features of
             # the L_head layer, and add these attention-weighted features to Xr
