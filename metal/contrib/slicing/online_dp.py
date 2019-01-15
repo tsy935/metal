@@ -134,7 +134,7 @@ class SliceDPModel(EndModel):
         if self.config["verbose"]:
             print("Slice Heads:")
             print("Reweighting:", self.reweight)
-            print ("L_weights:", self.L_weights)
+            print("L_weights:", self.L_weights)
             print("Slice Weight:", self.slice_weight)
             print("Input Network:", self.network)
             print("L_head:", self.L_head)
@@ -158,9 +158,7 @@ class SliceDPModel(EndModel):
         L_head_mask = abs(L)
         masked_loss_1 = self.criteria(self.forward_L(X), L_01) * L_head_mask
 
-        loss_1 = torch.mean(
-            masked_loss_1 @ self.L_weights
-        )
+        loss_1 = torch.mean(masked_loss_1 @ self.L_weights)
 
         # TODO: Calculate Y_tilde once and save; don't recalculate
         # Compute the noise-aware DP loss w/ the reweighted representation
@@ -169,7 +167,9 @@ class SliceDPModel(EndModel):
             label_probs = F.sigmoid(2 * L @ self.w).reshape(-1, 1)
             Y_tilde = torch.cat((label_probs, 1 - label_probs), dim=1)
 
-        dp_head_mask = (torch.sum(abs(L), dim=1) > 0).unsqueeze(1).repeat(1, 2).float()
+        dp_head_mask = (
+            (torch.sum(abs(L), dim=1) > 0).unsqueeze(1).repeat(1, 2).float()
+        )
         masked_loss_2 = self.criteria(self.forward_Y(X), Y_tilde) * dp_head_mask
         loss_2 = torch.mean(masked_loss_2)
 
@@ -199,8 +199,7 @@ class SliceDPModel(EndModel):
 
             # A is the [batch_size, 1, m] Tensor representing the relative
             # "confidence" of each LF on each example
-            # NOTE: Taking an absolute value / centering somewhere to capture the 
-            # "confidence" (not prediction)
+            # Take the absolute value to capture the confidence (not prediction)
             A = F.softmax(abs(self.forward_L(x))).unsqueeze(1)
 
             # We then project the A weighting onto the respective features of
@@ -214,4 +213,3 @@ class SliceDPModel(EndModel):
 
     def predict_proba(self, x):
         return F.softmax(self.forward_Y(x)).data.cpu().numpy()
-

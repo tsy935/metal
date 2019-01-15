@@ -88,7 +88,9 @@ def create_circular_slice(X, Y, C, h, k, r, slice_label, lf_num=None):
     Y[circ_idx] = slice_label
 
 
-def lf_slice_proportion_to_radius(target_sp, X, C, head_config, step_size=0.05, verbose=False):
+def lf_slice_proportion_to_radius(
+    target_sp, X, C, head_config, step_size=0.05, verbose=False
+):
     """ Naively estimate radius to achieve head slice / head slice + torso
      slice proportion
     """
@@ -118,7 +120,7 @@ def lf_slice_proportion_to_radius(target_sp, X, C, head_config, step_size=0.05, 
 def lf_circ_idx_for_slice_recall(
     target_val, X, slice_mask, lf_center, step_size=0.01, verbose=False
 ):
-    """Identifies appropriate indexes to achieve target recall on 
+    """Identifies appropriate indexes to achieve target recall on
     specified slice_idx. LFs will target in shape of circle."""
 
     # ensure there are some elements specified in slice
@@ -142,14 +144,16 @@ def lf_circ_idx_for_slice_recall(
         r += step_size
 
     if verbose:
-        print(f"target recall: {target_val}, found recall: {emp_recall}, found r: {r}")
+        print(
+            f"target recall: {target_val}, found recall: {emp_recall}, found r: {r}"
+        )
     return circ_idx
 
 
 def lf_circ_idx_for_slice_precision(
     target_val, X, slice_mask, lf_center, radius, step_size=0.01, verbose=False
 ):
-    """Identifies appropriate indexes to achieve target precision on 
+    """Identifies appropriate indexes to achieve target precision on
     specified slice_idx. LFs will target in shape of circle."""
 
     assert (
@@ -184,12 +188,21 @@ def lf_circ_idx_for_slice_precision(
 
 
 def update_L_to_target_slice(
-    L, X, C, target_metric, target_val, lf_num, acc, center, slice_radius, slice_label
+    L,
+    X,
+    C,
+    target_metric,
+    target_val,
+    lf_num,
+    acc,
+    center,
+    slice_radius,
+    slice_label,
 ):
     """ Updates L matrix in place to target slice with specified precision/lf score.
-    
+
     Args:
-        L: [N x num_lfs] label matrix that will be updated in place 
+        L: [N x num_lfs] label matrix that will be updated in place
         X: [N x d] all data points
         C: [N x 1] slice num for each data point
         target_metric: [string] either precision or recall of LF over slice
@@ -251,7 +264,7 @@ def generate_perfect_cov_L(N, accs, Y, C):
 def generate_imperfect_L(
     N, X, C, accs, mus, labels, lf_metrics, head_config=None
 ):
-    """ Generates imperfect L matrix with specified precision or recall 
+    """ Generates imperfect L matrix with specified precision or recall
     over the slice of interest.
 
     Args:
@@ -336,7 +349,9 @@ def generate_synthetic_data(config, x_var=None, x_val=None, verbose=False):
         # overwrite data points to create head slice
         # find radius for specified overlap proportion
         slice_radius = (
-            lf_slice_proportion_to_radius(x_val, X, C, config["head_config"], verbose=verbose)
+            lf_slice_proportion_to_radius(
+                x_val, X, C, config["head_config"], verbose=verbose
+            )
             if x_var == "sp"
             else config["head_config"]["r"]
         )
@@ -349,7 +364,7 @@ def generate_synthetic_data(config, x_var=None, x_val=None, verbose=False):
             k=config["head_config"]["k"],
             r=slice_radius,
             slice_label=config["head_config"]["slice_label"],
-            lf_num = 2
+            lf_num=2,
         )
 
     # labeling function generation
@@ -374,9 +389,7 @@ def generate_synthetic_data(config, x_var=None, x_val=None, verbose=False):
             config["mus"],
             config["labels"],
             config["covs"],
-            config["head_config"]
+            config["head_config"],
         )
 
     return X, Y, C, L
-
-

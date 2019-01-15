@@ -20,6 +20,15 @@ import torch
 from synthetics_utils import generate_synthetic_data
 from visualization_utils import plot_slice_scores, visualize_data
 
+from metal.contrib.logging.tensorboard import TensorBoardWriter
+from metal.contrib.slicing.experiment_utils import generate_weak_labels
+from metal.contrib.slicing.online_dp import (
+    LinearModule,
+    MLPModule,
+    SliceDPModel,
+)
+from metal.end_model import EndModel
+
 # Import tqdm_notebook if in Jupyter notebook
 try:
     from IPython import get_ipython
@@ -31,14 +40,6 @@ except (AttributeError, ImportError):
 else:
     from tqdm import tqdm_notebook as tqdm
 
-from metal.end_model import EndModel
-from metal.contrib.logging.tensorboard import TensorBoardWriter
-from metal.contrib.slicing.experiment_utils import generate_weak_labels
-from metal.contrib.slicing.online_dp import (
-    LinearModule,
-    MLPModule,
-    SliceDPModel,
-)
 
 sys.path.append("/dfs/scratch0/vschen/metal")
 
@@ -90,80 +91,82 @@ experiment_config = {
     "train_prop": 0.8,
     "use_weak_labels_from_gen_model": False,
     "tensorboard_logdir": "./run_logs",
-    "seed": False
+    "seed": False,
 }
 
 model_configs = {
     "EndModel": {
-        "base_model_class" : EndModel,
+        "base_model_class": EndModel,
         "input_module_class": MLPModule,
         "input_module_init_kwargs": {
-            'input_dim': 2,
-            'middle_dims': [10, 10],
-            'bias': True,
-            'output_dim': 10
-         },
+            "input_dim": 2,
+            "middle_dims": [10, 10],
+            "bias": True,
+            "output_dim": 10,
+        },
         "base_model_init_kwargs": {
             "layer_out_dims": [10, 2],
             "input_layer_config": {
                 "input_relu": False,
-                "input_batchnorm": False, 
+                "input_batchnorm": False,
                 "input_dropout": 0.0,
-            }
+            },
         },
-        "train_on_L": False
+        "train_on_L": False,
     },
     "UniformModel": {
-        "base_model_class" : SliceDPModel,
+        "base_model_class": SliceDPModel,
         "base_model_init_kwargs": {
             "reweight": False,
             "r": 10,
             "slice_weight": 0.5,
-            "L_weights": np.array([1., 1., 1.]).astype(np.float32)
+            "L_weights": np.array([1., 1., 1.]).astype(np.float32),
         },
         "input_module_class": MLPModule,
         "input_module_init_kwargs": {
-            'input_dim': 2,
-            'middle_dims': [10, 10],
-            'bias': True,
-            'output_dim': 10
-         },
-        "train_on_L": True
+            "input_dim": 2,
+            "middle_dims": [10, 10],
+            "bias": True,
+            "output_dim": 10,
+        },
+        "train_on_L": True,
     },
     "ManualModel": {
-        "base_model_class" : SliceDPModel,
+        "base_model_class": SliceDPModel,
         "base_model_init_kwargs": {
             "reweight": False,
             "r": 10,
             "slice_weight": 0.5,
-            "L_weights": np.array([1., 1., 5.]).astype(np.float32) # LF2 w/ 5x weight
+            "L_weights": np.array([1., 1., 5.]).astype(
+                np.float32
+            ),  # LF2 w/ 5x weight
         },
         "input_module_class": MLPModule,
         "input_module_init_kwargs": {
-            'input_dim': 2,
-            'middle_dims': [10, 10],
-            'bias': True,
-            'output_dim': 10
-         },
-        "train_on_L": True
+            "input_dim": 2,
+            "middle_dims": [10, 10],
+            "bias": True,
+            "output_dim": 10,
+        },
+        "train_on_L": True,
     },
     "AttentionModel": {
-        "base_model_class" : SliceDPModel,
+        "base_model_class": SliceDPModel,
         "base_model_init_kwargs": {
             "reweight": True,
             "r": 10,
             "slice_weight": 0.5,
-            "L_weights": None
+            "L_weights": None,
         },
         "input_module_class": MLPModule,
         "input_module_init_kwargs": {
-            'input_dim': 2,
-            'middle_dims': [10, 10],
-            'bias': True,
-            'output_dim': 10
-         },
+            "input_dim": 2,
+            "middle_dims": [10, 10],
+            "bias": True,
+            "output_dim": 10,
+        },
         "train_on_L": True,
-    }
+    },
 }
 
 
@@ -264,7 +267,7 @@ def eval_model(model, data, eval_dict):
 
 
 def simulate(data_config, generate_data_fn, experiment_config, model_configs):
-    """Simulates training over data (specified by data_config) with models specified 
+    """Simulates training over data (specified by data_config) with models specified
     in model_configs over the specified config, varying values specified in experiment_config.
 
     Args:
@@ -288,7 +291,7 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
     x_range = experiment_config["x_range"]
     var_name = experiment_config["x_var"]
 
-    if var_name == None:
+    if var_name is None:
         x_range = [None]
 
     # for each value, run num_trials simulations
@@ -297,7 +300,9 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
         for _ in tqdm(range(num_trials)):
 
             # generate data
-            X, Y, C, L = generate_data_fn(data_config, var_name, x, verbose=experiment_config["verbose"])
+            X, Y, C, L = generate_data_fn(
+                data_config, var_name, x, verbose=experiment_config["verbose"]
+            )
             if experiment_config.get("visualize_data", False):
                 visualize_data(X, Y, C, L)
 
@@ -311,11 +316,10 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
             Y = Y.astype(np.float32)
             split_idx = int(len(X) * experiment_config["train_prop"])
             X_train, X_test = X[:split_idx], X[split_idx:]
-            _, Y_test = Y[:split_idx], Y[split_idx:]  # no gt train data!
-            L_train, L_test = L[:split_idx], L[split_idx:]
-            C_train, C_test = C[:split_idx], C[split_idx:]
+            L_train = L[:split_idx]
+            Y_test = Y[split_idx:]  # no gt train data!
+            C_test = C[split_idx:]
 
-            train_data = (X_train, L_train)
             test_data = (X_test, Y_test)
 
             # set tensorboard logging directory
@@ -324,9 +328,15 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
                 logdir = os.path.join(logdir, f"{var_name}_{x}")
 
             if experiment_config["use_weak_labels_from_gen_model"]:
-                Y_weak = generate_weak_labels(L_train, verbose=experiment_config["verbose"])
+                Y_weak = generate_weak_labels(
+                    L_train, verbose=experiment_config["verbose"]
+                )
             else:
-                Y_weak = generate_weak_labels(L_train, data_config["accs"], verbose=experiment_config["verbose"])
+                Y_weak = generate_weak_labels(
+                    L_train,
+                    data_config["accs"],
+                    verbose=experiment_config["verbose"],
+                )
 
             trained_models = train_models(
                 X_train,
@@ -380,10 +390,7 @@ if __name__ == "__main__":
         help="range of values to scan over",
     )
     parser.add_argument(
-        "--radius",
-        type=float,
-        default=None,
-        help="radius of slice head",
+        "--radius", type=float, default=None, help="radius of slice head"
     )
     args = parser.parse_args()
 
@@ -419,4 +426,3 @@ if __name__ == "__main__":
         xlabel = "Head Precision"
 
     plot_slice_scores(results, xlabel=xlabel, savedir=args.save_dir)
-
