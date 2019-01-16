@@ -1,16 +1,17 @@
 import os
+
 import matplotlib.pyplot as plt
 import numpy as np
-
 import pandas as pd
 from IPython.display import display
 
+
 def display_scores(scores, x_var, x_range):
     scores = dict(scores)
-    
+
     for x_val in x_range:
         df_title = f"{x_var}: {x_val}"
-    
+
         pd_scores = {}
         for model_name, model_scores in scores.items():
             slice_names = model_scores[x_val][0].keys()
@@ -18,10 +19,11 @@ def display_scores(scores, x_var, x_range):
                             for slice_name in slice_names}
 
             pd_scores[model_name] = mean_scores
-    
+
         df = pd.DataFrame.from_dict(pd_scores)
         df.index.name = df_title
         display(df)
+
 
 def visualize_data(X, Y, C, L):
     # show data by class
@@ -36,7 +38,7 @@ def visualize_data(X, Y, C, L):
 
     # show data by slice
     plt.subplot(2, 2, 2)
-    plt.title('Data by Slice')
+    plt.title("Data by Slice")
     for c in np.unique(C):
         plt.scatter(X[C==c,0], X[C==c,1], label=f"$S_{int(c)}$", s=0.2)
     plt.xlim(-8, 8)
@@ -45,7 +47,7 @@ def visualize_data(X, Y, C, L):
 
     # LFs targeting slices
     plt.subplot(2, 2, 3)
-    plt.title('LFs ($\lambda_i$) Targeting Slices ($S_i$)')
+    plt.title("LFs ($\lambda_i$) Targeting Slices ($S_i$)")
     for c in np.unique(C):
        c = int(c)
        plt.scatter(X[L[:,c]!=0,0], X[L[:,c]!=0,1], label=f"$\lambda_{c}$", s=0.2)
@@ -64,37 +66,43 @@ def visualize_data(X, Y, C, L):
 #    plt.legend()
     plt.show()
 
-def plot_slice_scores(results, xlabel="Overlap Proportion", custom_ylims={}, custom_xranges={}, savedir=None):
+
+def plot_slice_scores(
+    results,
+    xlabel="Overlap Proportion",
+    custom_ylims={},
+    custom_xranges={},
+    savedir=None,
+):
     plt.figure(figsize=(10, 10))
     slice_names = ["S0", "S1", "S2", "overall"]
     for i, slice_name in enumerate(slice_names):
-        plt.subplot(2, 2, i+1)
+        plt.subplot(2, 2, i + 1)
 
-        for model_name, model_scores in results.items(): 
+        for model_name, model_scores in results.items():
             x_range = model_scores.keys()
 
             # modify x_range
             custom_xrange = custom_xranges.get(slice_name, None)
             if custom_xrange:
                 x_range = custom_xrange
-    
-        
+
             # take average value across trials
             scores_collected = [
                 np.mean(np.array([s[slice_name] for s in model_scores[x]]))
                 for x in x_range
             ]
-    
+
             plt.plot(x_range, scores_collected, label=model_name)
-        
+
         # print x-axis in precision 2
         x_range = ["%.2f" % float(x) for x in x_range]
-    
+
         plt.title(f"Accuracy on {slice_name} vs. {xlabel}")
         plt.xlabel(xlabel)
         plt.ylabel(f"Accuracy on {slice_name}")
 
-        # modify ylim 
+        # modify ylim
         custom_ylim = custom_ylims.get(slice_name, None)
         if custom_ylim:
             plt.ylim(bottom=custom_ylim[0], top=custom_ylim[1])
@@ -105,5 +113,4 @@ def plot_slice_scores(results, xlabel="Overlap Proportion", custom_ylims={}, cus
     plt.show()
 
     if savedir:
-       plt.savefig(os.path.join(savedir, "results.png")) 
-
+        plt.savefig(os.path.join(savedir, "results.png"))
