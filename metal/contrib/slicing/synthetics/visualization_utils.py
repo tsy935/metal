@@ -13,11 +13,9 @@ def display_scores(scores, x_var, x_range):
     
         pd_scores = {}
         for model_name, model_scores in scores.items():
-            S0 = np.mean([s['S0'] for s in model_scores[x_val]])
-            S1 = np.mean([s['S1'] for s in model_scores[x_val]])
-            S2 = np.mean([s['S2'] for s in model_scores[x_val]])
-            overall = np.mean([s['overall'] for s in model_scores[x_val]])    
-            mean_scores = {'S0':S0, 'S1':S1, 'S2':S2, 'overall':overall}
+            slice_names = model_scores[x_val][0].keys()
+            mean_scores = {slice_name : np.mean([s[slice_name] for s in model_scores[x_val]]) 
+                            for slice_name in slice_names}
 
             pd_scores[model_name] = mean_scores
     
@@ -30,8 +28,8 @@ def visualize_data(X, Y, C, L):
     plt.figure(figsize=(8, 8))
     plt.subplot(2, 2, 1)
     plt.title('Data by Classes')
-    plt.scatter(X[Y==1,0], X[Y==1,1], label="$y=+1$", c='C1')
-    plt.scatter(X[Y==-1,0], X[Y==-1,1], label="$y=-1$", c='C0')
+    plt.scatter(X[Y==1,0], X[Y==1,1], label="$y=+1$", c='C1', s=0.2)
+    plt.scatter(X[Y==-1,0], X[Y==-1,1], label="$y=-1$", c='C0', s=0.2)
     plt.xlim(-8, 8)
     plt.ylim(-8, 8)
     plt.legend()
@@ -40,9 +38,7 @@ def visualize_data(X, Y, C, L):
     plt.subplot(2, 2, 2)
     plt.title('Data by Slice')
     for c in np.unique(C):
-        plt.scatter(X[C==c,0], X[C==c,1], label=f"$S_{int(c)}$")
- #   plt.scatter(X[C==1,0], X[C==1,1], label="$S_1$", c='C1')
- #   plt.scatter(X[C==2,0], X[C==2,1], label="$S_2$", c='C2')
+        plt.scatter(X[C==c,0], X[C==c,1], label=f"$S_{int(c)}$", s=0.2)
     plt.xlim(-8, 8)
     plt.ylim(-8, 8)
     plt.legend()
@@ -52,22 +48,20 @@ def visualize_data(X, Y, C, L):
     plt.title('LFs ($\lambda_i$) Targeting Slices ($S_i$)')
     for c in np.unique(C):
        c = int(c)
-       plt.scatter(X[L[:,c]!=0,0], X[L[:,c]!=0,1], label=f"$\lambda_{c}$")
- #   plt.scatter(X[L[:,1]!=0,0], X[L[:,1]!=0,1], label="$\lambda_1$", c='C1')
- #   plt.scatter(X[L[:,2]!=0,0], X[L[:,2]!=0,1], label="$\lambda_2$", c='C2')
+       plt.scatter(X[L[:,c]!=0,0], X[L[:,c]!=0,1], label=f"$\lambda_{c}$", s=0.2)
     plt.xlim(-8, 8)
     plt.ylim(-8, 8)
     plt.legend()
     
-    plt.subplot(2, 2, 4)
-    plt.title('$\lambda_2$ votes')
-    # first plot underlying slice
-    plt.scatter(X[C==2,0], X[C==2,1], label="$S_2$", s=0.1, c='red')
-    plt.scatter(X[L[:,2]==1,0], X[L[:,2]==1,1], label="$\lambda_2=+1$", s=0.2, c='C1')
-    plt.scatter(X[L[:,2]==-1,0], X[L[:,2]==-1,1], label="$\lambda_2=-1$", s=0.2, c='C0')    
-    plt.xlim(-8, 8)
-    plt.ylim(-8, 8)
-    plt.legend()
+#    plt.subplot(2, 2, 4)
+#    plt.title('$\lambda_2$ votes')
+#    # first plot underlying slice
+#    plt.scatter(X[C==2,0], X[C==2,1], label="$S_2$", s=0.1, c='red')
+#    plt.scatter(X[L[:,2]==1,0], X[L[:,2]==1,1], label="$\lambda_2=+1$", s=0.2, c='C1')
+#    plt.scatter(X[L[:,2]==-1,0], X[L[:,2]==-1,1], label="$\lambda_2=-1$", s=0.2, c='C0')    
+#    plt.xlim(-8, 8)
+#    plt.ylim(-8, 8)
+#    plt.legend()
     plt.show()
 
 def plot_slice_scores(results, xlabel="Overlap Proportion", custom_ylims={}, custom_xranges={}, savedir=None):
