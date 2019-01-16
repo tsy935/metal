@@ -158,9 +158,12 @@ class SliceDPModel(EndModel):
         L_head_mask = abs(L)
         masked_loss_1 = self.criteria(self.forward_L(X), L_01) * L_head_mask
 
-        loss_1 = torch.mean(
+        loss_1 = torch.sum(
             masked_loss_1 @ self.L_weights
         )
+
+        # divide by num unmasked terms
+        loss_1 /= L_head_mask.sum()
 
         # TODO: Calculate Y_tilde once and save; don't recalculate
         # Compute the noise-aware DP loss w/ the reweighted representation
@@ -201,7 +204,7 @@ class SliceDPModel(EndModel):
             # "confidence" of each LF on each example
             # NOTE: Taking an absolute value / centering somewhere to capture the 
             # "confidence" (not prediction)
-            A = F.softmax(abs(self.forward_L(x))).unsqueeze(1)
+            A = F.softmax(torch.abs(self.forward_L(x))).unsqueeze(1)
 
             # We then project the A weighting onto the respective features of
             # the L_head layer, and add these attention-weighted features to Xr
