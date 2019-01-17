@@ -114,3 +114,38 @@ def plot_slice_scores(
 
     if savedir:
         plt.savefig(os.path.join(savedir, "results.png"))
+
+
+def plot_predictions(X_test, Y_test, model):
+    Y_p, Y = model._get_predictions((X_test, Y_test))
+
+    correct_idx = np.where(Y_p == Y)[0]
+    wrong_idx = np.where(Y_p != Y)[0]
+    plt.scatter(X_test[correct_idx, 0], X_test[correct_idx, 1], c='green', label='correct')
+    plt.scatter(X_test[wrong_idx, 0], X_test[wrong_idx, 1], c='red', label='wrong')
+    plt.legend()
+    plt.xlim(-8, 8)
+    plt.ylim(-8, 8)
+
+
+def compare_prediction_plots(test_data, end_model, attention_model):
+    X_test, Y_test = test_data
+    
+    plt.figure(figsize=(18, 6))
+    plt.subplot(1, 3, 1)
+    plt.title('GT Classes')
+    class_1_idx = np.where(Y_test==1)[0]
+    class_2_idx = np.where(Y_test==2)[0]
+    plt.scatter(X_test[class_1_idx,0], X_test[class_1_idx,1], label="$y=1$", c='C1')
+    plt.scatter(X_test[class_2_idx,0], X_test[class_2_idx,1], label="$y=2$", c='C0')
+    plt.xlim(-8, 8)
+    plt.ylim(-8, 8)
+    plt.legend()
+    plt.subplot(1, 3, 2)
+    plt.title('EndModel')
+    plot_predictions(X_test, Y_test, end_model)
+    plt.subplot(1, 3, 3)
+    plt.title('AttentionModel')
+    plot_predictions(X_test, Y_test, attention_model)
+    plt.show()
+    

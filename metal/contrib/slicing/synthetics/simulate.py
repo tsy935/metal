@@ -273,7 +273,7 @@ def eval_model(model, data, eval_dict):
     return slice_scores
 
 
-def simulate(data_config, generate_data_fn, experiment_config, model_configs):
+def simulate(data_config, generate_data_fn, experiment_config, model_configs, return_trained=False):
     """Simulates training over data (specified by data_config) with models specified
     in model_configs over the specified config, varying values specified in experiment_config.
 
@@ -364,7 +364,10 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
                     eval_model(model, test_data, eval_dict)
                 )
 
-    return scores
+    if return_trained: 
+        return scores, trained_models
+    else:
+        return scores
 
 
 if __name__ == "__main__":
