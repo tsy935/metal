@@ -191,6 +191,28 @@ def categorical_to_plusminus(Y):
     return convert_labels(Y, "categorical", "plusminus")
 
 
+def label_matrix_to_one_hot(L, k=None):
+    """Converts a 2D [n,m] label matrix into an [n,m,k] one hot 3D tensor
+
+    Note that in the returned 3D matrix, abstains votes continue to be
+    represented by 0s, not 1s.
+
+    Args:
+        L: a [n,m] label matrix with categorical labels (0 = abstain)
+        k: the number of classes that could appear in L
+            if None, k is inferred as the max element in L
+    """
+    n, m = L.shape
+    if k is None:
+        k = L.max()
+    L_onehot = torch.zeros(n, m, k + 1)
+    for i, row in enumerate(L):
+        for j, k in enumerate(row):
+            if k > 0:
+                L_onehot[i, j, k - 1] = 1
+    return L_onehot
+
+
 def recursive_merge_dicts(x, y, misses="report", verbose=None):
     """
     Merge dictionary y into a copy of x, overwriting elements of x when there
