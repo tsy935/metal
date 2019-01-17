@@ -10,11 +10,16 @@ def generate_weak_labels(L_train, accs=None, verbose=False, seed=0):
     L_train_np = L_train.copy()
 
     if accs is not None:
+        if np.any(accs==1):
+            print ("Warning: clipping accuracy at 0.95")
+            accs[accs==1] = 0.95
+
         # Combine with weights computed from LF accuracies
         w = np.log(accs / (1 - accs))
         w[np.abs(w) == np.inf] = 0  # set weights from acc==0 to 0
 
         # L_train_pt = torch.from_numpy(L_train.astype(np.float32))
+        # TODO: add multiclass support
         L_train_np[L_train_np == 2] = -1
         label_probs = expit(2 * L_train_np @ w).reshape(-1, 1)
         Y_weak = np.concatenate((label_probs, 1 - label_probs), axis=1)
