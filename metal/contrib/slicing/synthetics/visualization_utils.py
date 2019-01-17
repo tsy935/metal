@@ -75,7 +75,7 @@ def plot_slice_scores(
     savedir=None,
 ):
     plt.figure(figsize=(10, 10))
-    slice_names = ["S0", "S1", "S2", "overall"]
+    slice_names = ["S0", "S1", "overall"]
     for i, slice_name in enumerate(slice_names):
         plt.subplot(2, 2, i + 1)
 

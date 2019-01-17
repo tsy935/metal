@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import torch
 from synthetics_utils import generate_synthetic_data
-from visualization_utils import plot_slice_scores, visualize_data
+from visualization_utils import plot_slice_scores, visualize_data, compare_prediction_plots
 
 from metal.contrib.logging.tensorboard import TensorBoardWriter
 from metal.contrib.slicing.experiment_utils import generate_weak_labels
@@ -273,7 +273,7 @@ def eval_model(model, data, eval_dict):
     return slice_scores
 
 
-def simulate(data_config, generate_data_fn, experiment_config, model_configs, return_trained=False):
+def simulate(data_config, generate_data_fn, experiment_config, model_configs):
     """Simulates training over data (specified by data_config) with models specified
     in model_configs over the specified config, varying values specified in experiment_config.
 
@@ -297,7 +297,6 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs, re
     num_trials = experiment_config["num_trials"]
     x_range = experiment_config["x_range"]
     var_name = experiment_config["x_var"]
-
     if var_name is None:
         x_range = [None]
 
@@ -353,21 +352,20 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs, re
             )
 
             # score the models
-            S0_idx, S1_idx, S2_idx = (
-                np.where(C_test == 0)[0],
-                np.where(C_test == 1)[0],
-                np.where(C_test == 2)[0],
-            )
-            eval_dict = {"S0": S0_idx, "S1": S1_idx, "S2": S2_idx}
+            eval_dict = {
+                "S0": np.where(C_test == 0)[0], 
+                "S1": np.where(C_test == 1)[0]
+            }
             for model_name, model in trained_models.items():
                 scores[model_name][x].append(
                     eval_model(model, test_data, eval_dict)
                 )
 
-    if return_trained: 
-        return scores, trained_models
-    else:
-        return scores
+            if experiment_config["plot_predictions"]:
+                model1, model2 = tuple(experiment_config["plot_predictions"])
+                compare_prediction_plots((X_test, Y_test), trained_models[model1], trained_models[model2])
+
+    return scores
 
 
 if __name__ == "__main__":
