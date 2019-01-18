@@ -19,6 +19,9 @@ build/
 # VSCode
 .vscode/
 
+# Tensorbaord
+events.out*
+
 # Local data and notebooks
 data/*
 notebooks/local/*
