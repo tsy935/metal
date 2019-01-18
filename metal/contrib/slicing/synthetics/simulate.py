@@ -21,7 +21,7 @@ from synthetics_utils import generate_synthetic_data
 from visualization_utils import plot_slice_scores, visualize_data, compare_prediction_plots
 
 from metal.contrib.logging.tensorboard import TensorBoardWriter
-from metal.contrib.slicing.experiment_utils import generate_weak_labels
+from metal.contrib.slicing.experiment_utils import generate_weak_labels, compute_lf_accuracies
 from metal.contrib.slicing.online_dp import (
     LinearModule,
     MLPModule,
@@ -88,7 +88,8 @@ experiment_config = {
         "checkpoint_runway": 5,
     },
     "verbose": False,
-    "train_prop": 0.8,
+    "train_prop": 0.7,
+    "dev_prop": 0.1,
     "use_weak_labels_from_gen_model": False,
     "tensorboard_logdir": "./run_logs",
     "seed": False,
@@ -320,23 +321,28 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
             X = torch.from_numpy(X.astype(np.float32))
             L = L.astype(np.float32)
             Y = Y.astype(np.float32)
-            split_idx = int(len(X) * experiment_config["train_prop"])
-            X_train, X_test = X[:split_idx], X[split_idx:]
-            L_train = L[:split_idx]
-            Y_train, Y_test = Y[:split_idx], Y[split_idx:]
-            C_test = C[split_idx:]
+
+            train_end_idx = int(len(X) * experiment_config["train_prop"])
+            dev_end_idx = train_end_idx + int(len(X) * experiment_config["dev_prop"])
+
+            X_train, X_dev, X_test = X[:train_end_idx], X[train_end_idx:dev_end_idx], X[dev_end_idx:]
+            Y_train, Y_dev, Y_test = Y[:train_end_idx], Y[train_end_idx:dev_end_idx], Y[dev_end_idx:]
+            C_train, C_dev, C_test = C[:train_end_idx], C[train_end_idx:dev_end_idx], C[dev_end_idx:]
+            L_train, L_dev, L_test = L[:train_end_idx], L[train_end_idx:dev_end_idx], L[dev_end_idx:]
 
             test_data = (X_test, Y_test)
 
-            # set tensorboard logging directory
+
+            # generate weak labels
             if experiment_config["use_weak_labels_from_gen_model"]:
                 Y_weak = generate_weak_labels(
                     L_train, verbose=experiment_config["verbose"]
                 )
             else:
+                accs = compute_lf_accuracies(L_dev, Y_dev)
                 Y_weak = generate_weak_labels(
                     L_train,
-                    data_config["accs"],
+                    accs,
                     verbose=experiment_config["verbose"],
                 )
 
