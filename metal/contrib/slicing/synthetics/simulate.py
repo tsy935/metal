@@ -249,10 +249,11 @@ def train_models(
             SyntheticDataset(X_train, Y_train, L_train) if config["train_on_L"]
             else SyntheticDataset(X_train, Y_train)
         )
-        sampler = None
-        multipliers = config.get("upsample_lf0", None)
-        if multipliers is not None:
-            sampler = get_weighted_sampler_via_targeting_lfs(L_train, [0], 3)
+        multiplier = config.get("upsample_lf0_multiplier", None)
+        if multiplier:
+            sampler = get_weighted_sampler_via_targeting_lfs(L_train, [0], multiplier)
+        else:
+            sampler = None
 
         train_loader = DataLoader(
             train_dataset, 
