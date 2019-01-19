@@ -67,6 +67,26 @@ def visualize_data(X, Y, C, L):
     plt.show()
 
 
+def plot_base_attention_delta(scores, xlabel=None):
+    scores_collected = {}
+    for model_name, model_scores in scores.items():
+        x_range = model_scores.keys()
+
+        # take average value across trials
+        scores_collected[model_name] = [
+            np.mean(np.array([s['S0'] for s in model_scores[x]]))
+            for x in x_range
+        ]
+    delta = np.array(scores_collected['AttentionModel']) - np.array(scores_collected['EndModel'])
+
+    x_range = list(scores['AttentionModel'].keys())
+    plt.plot(x_range, delta)
+    plt.axhline(0, linestyle='--', c='red')
+    plt.title('$Attention - EndModel$ Delta Scores on S0')
+    if xlabel: 
+        plt.xlabel(xlabel)
+
+
 def plot_slice_scores(
     results,
     xlabel="Overlap Proportion",
@@ -110,6 +130,10 @@ def plot_slice_scores(
             plt.ylim(bottom=0, top=1)
 
         plt.legend()
+    
+    plt.subplot(2, 2, 4)
+    plot_base_attention_delta(results, xlabel)
+
     plt.show()
 
     if savedir:
