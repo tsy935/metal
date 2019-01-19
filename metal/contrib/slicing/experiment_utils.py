@@ -2,7 +2,39 @@ import numpy as np
 from scipy.special import expit
 from termcolor import colored
 
-from metal.metrics import metric_score
+from torch.utils.data.sampler import WeightedRandomSampler
+from metal.metrics import metric_score, accuracy_score
+
+def get_weighted_sampler_via_targeting_lfs(L_train, targeting_lfs_idx, upweight_multiplier):
+    """ Creates a weighted sampler that upweights values based on whether they are targeted
+    by LFs. Intuitively, upweights examples that might be "contributing" to slice performance,
+    as defined by label matrix.
+    
+    Args:
+        L_train: label matrix
+        targeting_lfs_idx: list of ints pointing to the columns of the L_matrix
+            that are targeting the slice of interest.
+        upweight_multiplier: multiplier to upweight samples covered by targeting_lfs_idx
+    Returns:
+        WeightedSampler to be pasesd into Dataloader
+    
+    """
+        
+    upweighting_mask = np.sum(L_train[:, targeting_lfs_idx], axis=1) > 0
+    weights = np.ones(upweighting_mask.shape)
+    weights[upweighting_mask] = upweight_multiplier
+    num_samples = int(sum(weights))
+    return WeightedRandomSampler(weights, num_samples)
+
+
+def compute_lf_accuracies(L_dev, Y_dev):
+    """ Returns len m list of accuracies corresponding to each lf"""
+    accs = []
+    m = L_dev.shape[1]
+    for lf_idx in range(m):
+        voted_idx = L_dev[:, lf_idx] != 0
+        accs.append(accuracy_score(L_dev[voted_idx, lf_idx], Y_dev[voted_idx]))
+    return accs
 
 
 def generate_weak_labels(L_train, accs=None, verbose=False, seed=0):
@@ -10,6 +42,7 @@ def generate_weak_labels(L_train, accs=None, verbose=False, seed=0):
     L_train_np = L_train.copy()
 
     if accs is not None:
+        accs = np.array(accs)
         if np.any(accs==1):
             print ("Warning: clipping accuracy at 0.95")
             accs[accs==1] = 0.95

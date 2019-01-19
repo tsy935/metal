@@ -17,17 +17,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from torch.utils.data import DataLoader
 from synthetics_utils import generate_synthetic_data
 from visualization_utils import plot_slice_scores, visualize_data, compare_prediction_plots
 
 from metal.contrib.logging.tensorboard import TensorBoardWriter
-from metal.contrib.slicing.experiment_utils import generate_weak_labels, compute_lf_accuracies
+from metal.contrib.slicing.experiment_utils import (
+    generate_weak_labels,
+    compute_lf_accuracies,
+    get_weighted_sampler_via_targeting_lfs
+)
 from metal.contrib.slicing.online_dp import (
     LinearModule,
     MLPModule,
     SliceDPModel,
 )
 from metal.end_model import EndModel
+
 
 # Import tqdm_notebook if in Jupyter notebook
 try:
@@ -172,23 +178,27 @@ model_configs = {
 
 
 class SyntheticDataset(torch.utils.data.Dataset):
-    def __init__(self, X, L, Y):
+    def __init__(self, X, Y, L=None):
         self.X = X
-        print ("Hardcoding 2 -> cat labels")
         if len(Y.shape) == 1:
+            print ("Y is one dimensional. Converting to cat labels")
             Y_cat = np.zeros((Y.shape[0], 2))
             Y_cat[:,0] = Y == 1
             Y_cat[:,1] = Y == 2
             self.Y = Y_cat.astype(np.float32)
         else:
             self.Y = Y.astype(np.float32)
+
         self.L = L
 
     def __len__(self):
         return self.X.shape[0]
 
     def __getitem__(self, idx):
-        return self.X[idx], self.L[idx], self.Y[idx]
+        if self.L is None:
+            return self.X[idx], self.Y[idx]
+        else:
+            return self.X[idx], self.L[idx], self.Y[idx]
 
 
 def train_models(
@@ -234,14 +244,25 @@ def train_models(
             seed=seed,
         )
 
-        # train model
-        train_data = (
-            SyntheticDataset(X_train, L_train, Y_train) if config["train_on_L"]
-            else (X_train, Y_train)
+        # create dataloader
+        train_dataset = (
+            SyntheticDataset(X_train, Y_train, L_train) if config["train_on_L"]
+            else SyntheticDataset(X_train, Y_train)
         )
+        sampler = None
+        multipliers = config.get("upsample_lf0", None)
+        if multipliers is not None:
+            sampler = get_weighted_sampler_via_targeting_lfs(L_train, [0], 3)
 
+        train_loader = DataLoader(
+            train_dataset, 
+            batch_size=train_kwargs.get("batch_size", 32),
+            num_workers=1,
+            sampler=sampler
+        )
+        # train model
         model.train_model(
-            train_data,
+            train_loader,
             dev_data=test_data,
             **train_kwargs,
         )
@@ -331,7 +352,6 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
             L_train, L_dev, L_test = L[:train_end_idx], L[train_end_idx:dev_end_idx], L[dev_end_idx:]
 
             test_data = (X_test, Y_test)
-
 
             # generate weak labels
             if experiment_config["use_weak_labels_from_gen_model"]:
