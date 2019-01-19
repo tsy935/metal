@@ -177,8 +177,8 @@ def lf_circ_idx_for_slice_precision(
             circ_idx
         )
 
-        # shift to left
-        h -= step_size
+        # shift to right (or if stepsize is negative, to left)
+        h += step_size
 
     if verbose:
         print(
