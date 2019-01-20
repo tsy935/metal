@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 
 
 class MetalDataset(Dataset):
-    """A dataset that group each item in X with it label from Y
+    """A dataset that group each item in X with its label from Y
 
     Args:
         X: an n-dim iterable of items
@@ -32,6 +32,25 @@ class MetalDataset(Dataset):
 
     def __len__(self):
         return len(self.X)
+
+
+class SlicingDataset(Dataset):
+    """A dataset that returns one item from each iterable in the input data
+
+    Args:
+        data: some number of iterables
+    """
+
+    def __init__(self, *data):
+        self.data
+        for dtype in data:
+            assert len(dtype) == len(data[0])
+
+    def __getitem__(self, index):
+        return tuple([dtype[index] for dtype in self.data])
+
+    def __len__(self):
+        return len(self.data[0])
 
 
 class Checkpointer(object):
