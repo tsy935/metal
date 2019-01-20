@@ -42,7 +42,7 @@ class SlicingDataset(Dataset):
     """
 
     def __init__(self, *data):
-        self.data
+        self.data = data
         for dtype in data:
             assert len(dtype) == len(data[0])
 
