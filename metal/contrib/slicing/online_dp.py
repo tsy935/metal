@@ -5,9 +5,9 @@ import torch.nn.functional as F
 
 from metal.end_model.em_defaults import em_default_config
 from metal.end_model.end_model import EndModel
+from metal.end_model.loss import SoftCrossEntropyLoss
 from metal.metrics import metric_score
 from metal.utils import recursive_merge_dicts
-from metal.end_model.loss import SoftCrossEntropyLoss
 
 
 class LinearModule(nn.Module):
@@ -146,18 +146,18 @@ class SliceDPModel(EndModel):
         """
 
         # L indicates whether LF is triggered; supports multiclass
-        L[L!=0] = 1         
-        
+        L[L != 0] = 1
+
         # LF heads loss
         loss_1 = torch.mean(
             self.criteria_L(self.forward_L(X), L) @ self.L_weights
         )
 
         # Mask if none of the slices are activated-- don't backprop
-        dp_head_mask = (
-            (torch.sum(abs(L), dim=1) > 0).float()
+        dp_head_mask = (torch.sum(abs(L), dim=1) > 0).float()
+        masked_Y_loss = (
+            self.criteria_Y(self.forward_Y(X), Y_weak) * dp_head_mask
         )
-        masked_Y_loss = self.criteria_Y(self.forward_Y(X), Y_weak) * dp_head_mask
         loss_2 = torch.mean(masked_Y_loss)
 
         # Compute the weighted sum of these
@@ -180,7 +180,7 @@ class SliceDPModel(EndModel):
 
         # Concatenate with the LF attention-weighted representation as well
         if self.reweight:
-            # A is the [batch_size, 1, m] Tensor representing the confidences 
+            # A is the [batch_size, 1, m] Tensor representing the confidences
             # that the example belongs to each L_head
             A = F.softmax(self.forward_L(x)).unsqueeze(1)
 
@@ -196,4 +196,3 @@ class SliceDPModel(EndModel):
     def predict_proba(self, x):
         with torch.no_grad():
             return F.softmax(self.forward_Y(x)).data.cpu().numpy()
-
