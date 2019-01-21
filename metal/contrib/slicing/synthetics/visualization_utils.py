@@ -27,33 +27,39 @@ def display_scores(scores, x_var, x_range):
 
 def visualize_data(X, Y, C, L):
     # show data by class
-    plt.figure(figsize=(8, 8))
-    plt.subplot(2, 2, 1)
-    plt.title('Data by Classes')
+#    plt.figure(figsize=(8, 8))
+    plt.figure(figsize=(4, 4))
+#    plt.subplot(2, 2, 1)
+    plt.title('Data by Class Label')
     plt.scatter(X[Y==1,0], X[Y==1,1], label="$y=1$", c='C1', s=0.2)
     plt.scatter(X[Y==2,0], X[Y==2,1], label="$y=2$", c='C0', s=0.2)
-    plt.xlim(-8, 8)
+    plt.xlim(-4, 12)
     plt.ylim(-8, 8)
-    plt.legend()
+    plt.legend(markerscale=10, loc='upper left')
+    plt.show()
 
     # show data by slice
-    plt.subplot(2, 2, 2)
+#    plt.subplot(2, 2, 2)
+    plt.figure(figsize=(4, 4))
     plt.title("Data by Slice")
     for c in np.unique(C):
         plt.scatter(X[C==c,0], X[C==c,1], label=f"$S_{int(c)}$", s=0.2)
-    plt.xlim(-8, 8)
+    plt.xlim(-4, 12)
     plt.ylim(-8, 8)
-    plt.legend()
+    plt.legend(markerscale=10)
+    plt.show()
 
     # LFs targeting slices
-    plt.subplot(2, 2, 3)
+#    plt.subplot(2, 2, 3)
+    plt.figure(figsize=(4, 4))
     plt.title("LFs ($\lambda_i$) Targeting Slices ($S_i$)")
     for c in np.unique(C):
        c = int(c)
        plt.scatter(X[L[:,c]!=0,0], X[L[:,c]!=0,1], label=f"$\lambda_{c}$", s=0.2)
-    plt.xlim(-8, 8)
+    plt.xlim(-4, 12)
     plt.ylim(-8, 8)
     plt.legend()
+    plt.show()
     
 #    plt.subplot(2, 2, 4)
 #    plt.title('$\lambda_2$ votes')
@@ -128,7 +134,6 @@ def plot_slice_scores(
             plt.ylim(bottom=custom_ylim[0], top=custom_ylim[1])
         else:
             plt.ylim(bottom=0, top=1)
-
         plt.legend()
     
     plt.subplot(2, 2, 4)
@@ -140,36 +145,42 @@ def plot_slice_scores(
         plt.savefig(os.path.join(savedir, "results.png"))
 
 
-def plot_predictions(X_test, Y_test, model):
+def plot_predictions(X_test, Y_test, model, C=None):
     Y_p, Y = model._get_predictions((X_test, Y_test))
 
     correct_idx = np.where(Y_p == Y)[0]
     wrong_idx = np.where(Y_p != Y)[0]
-    plt.scatter(X_test[correct_idx, 0], X_test[correct_idx, 1], c='green', label='correct')
-    plt.scatter(X_test[wrong_idx, 0], X_test[wrong_idx, 1], c='red', label='wrong')
-    plt.legend()
-    plt.xlim(-8, 8)
-    plt.ylim(-8, 8)
+    if C is not None:
+        for c in np.unique(C):
+            c_idx = np.where(C==c)[0]
+            plt.scatter(X_test[c_idx,0], X_test[c_idx,1], s=3)
+#    plt.scatter(X_test[correct_idx, 0], X_test[correct_idx, 1], c='grey', label='correct', s=7)
+    plt.scatter(X_test[wrong_idx, 0], X_test[wrong_idx, 1], c='red', label='incorrect prediction', s=10)
+    plt.legend(markerscale=1)
+    plt.xlim(-4, 4)
+    plt.ylim(-4, 4)
 
 
-def compare_prediction_plots(test_data, end_model, attention_model):
+def compare_prediction_plots(test_data, trained_models, C=None):
     X_test, Y_test = test_data
     
-    plt.figure(figsize=(18, 6))
-    plt.subplot(1, 3, 1)
+    num_plots = len(trained_models) + 1 # +1 for GT plot
+    plt.figure(figsize=(4*num_plots, 4))
+    plt.subplot(1, num_plots, 1)
     plt.title('GT Classes')
     class_1_idx = np.where(Y_test==1)[0]
     class_2_idx = np.where(Y_test==2)[0]
-    plt.scatter(X_test[class_1_idx,0], X_test[class_1_idx,1], label="$y=1$", c='C1')
-    plt.scatter(X_test[class_2_idx,0], X_test[class_2_idx,1], label="$y=2$", c='C0')
-    plt.xlim(-8, 8)
+    plt.scatter(X_test[class_1_idx,0], X_test[class_1_idx,1], label="$y=1$", c='C1', s=2)
+    plt.scatter(X_test[class_2_idx,0], X_test[class_2_idx,1], label="$y=2$", c='C0', s=2)
+    plt.xlim(-4, 12)
     plt.ylim(-8, 8)
     plt.legend()
-    plt.subplot(1, 3, 2)
-    plt.title('EndModel')
-    plot_predictions(X_test, Y_test, end_model)
-    plt.subplot(1, 3, 3)
-    plt.title('AttentionModel')
-    plot_predictions(X_test, Y_test, attention_model)
+
+    for i, (model_name, model) in enumerate(trained_models.items()):
+#        plt.subplot(1,num_plots,i+2)
+        plt.figure(figsize=(4, 4))
+        plt.title(model_name)
+        plot_predictions(X_test, Y_test, model, C)
+        plt.show()
     plt.show()
     

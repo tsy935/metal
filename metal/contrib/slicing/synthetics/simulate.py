@@ -1,4 +1,11 @@
 """Runs simulations over equal weights, manual reweighting,
+        
+t_pred
+    plt.title('EndModel')
+    plot_predictions(X_test, Y_test, end_model)
+    plt.subplot(1, 3, 3)
+    plt.title('AttentionModel')
+    plot_predictions(X_test, Y_test, attention_model)
 and attention based models.
 
 Sample command:
@@ -379,18 +386,17 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
             )
 
             # score the models
-            eval_dict = {
-                "S0": np.where(C_test == 0)[0], 
-                "S1": np.where(C_test == 1)[0]
-            }
+            eval_dict = {}
+            for i in range(L_train.shape[1]):
+                eval_dict[f"S{i}"] = np.where(C_test == i)[0]
+
             for model_name, model in trained_models.items():
                 scores[model_name][x].append(
                     eval_model(model, test_data, eval_dict)
                 )
 
             if experiment_config["plot_predictions"]:
-                model1, model2 = tuple(experiment_config["plot_predictions"])
-                compare_prediction_plots((X_test, Y_test), trained_models[model1], trained_models[model2])
+                compare_prediction_plots((X_test, Y_test), trained_models)
 
     return scores
 
