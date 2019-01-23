@@ -293,7 +293,7 @@ class Classifier(nn.Module):
                 optimizer.zero_grad()
 
                 # Forward pass to calculate outputs
-                loss = loss_fn(*data)
+                loss = loss_fn(*data)  # Return a batch-averaged loss
                 if torch.isnan(loss):
                     msg = "Loss is NaN. Consider reducing learning rate."
                     raise Exception(msg)
