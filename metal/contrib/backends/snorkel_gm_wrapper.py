@@ -3,7 +3,6 @@ from scipy.sparse import csr_matrix, issparse
 from snorkel.learning.gen_learning import GenerativeModel
 
 from metal.label_model import LabelModel
-from metal.utils import categorical_to_plusminus, recursive_merge_dicts
 
 
 class SnorkelLabelModel(LabelModel):
@@ -14,15 +13,15 @@ class SnorkelLabelModel(LabelModel):
         self.model = GenerativeModel()
 
     def train_model(self, L, **kwargs):
-        L = categorical_to_plusminus(L)
         if not issparse(L):
             L = csr_matrix(L)
+        L[L == 2] = -1
         self.model.train(L, verbose=False, **kwargs)
 
     def predict_proba(self, L):
-        L = categorical_to_plusminus(L)
         if not issparse(L):
             L = csr_matrix(L)
+        L[L == 2] = -1
         marginals = self.model.marginals(L).reshape(-1, 1)
         Y_ps = np.hstack((marginals, 1 - marginals))
         return Y_ps
