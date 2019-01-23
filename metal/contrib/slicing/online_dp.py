@@ -278,6 +278,9 @@ class SliceHatModel(EndModel):
             print(self)
             print()
 
+    def _get_loss_fn(self):
+        return self._loss
+
     def _loss(self, X, L, Y_s):
         """Returns the average loss per example"""
         # For efficiency, L would be converted to {-1,0,1} before being passed
@@ -316,6 +319,7 @@ class SliceHatModel(EndModel):
         return loss
 
     def forward_Y_off(self, X, L_logits=None):
+        """Returns the logits of the offline Y_head"""
         neck = self.body(X)
         if not L_logits:
             L_logits = self.L_head(neck)
@@ -335,9 +339,6 @@ class SliceHatModel(EndModel):
             # Concatentate these into a single input for the Y_head
             neck = torch.cat((R, S), 1)
         return self.Y_head_off(neck)
-
-    def _get_loss_fn(self):
-        return self._loss
 
     @torch.no_grad()
     def predict_L_proba(self, X):
