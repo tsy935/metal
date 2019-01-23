@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.special import expit
+from scipy.sparse import csr_matrix
 from termcolor import colored
 
 from torch.utils.data.sampler import WeightedRandomSampler
@@ -7,7 +8,11 @@ from metal.metrics import metric_score, accuracy_score
 
 
 def slice_mask_from_targeting_lfs_idx(L, targeting_lfs_idx):
-    return np.sum(L[:, targeting_lfs_idx], axis=1) > 0
+    if isinstance(L, csr_matrix):
+        L = np.array(L.todense())
+
+    mask = np.sum(L[:, targeting_lfs_idx], axis=1) > 0
+    return mask.squeeze()
 
 
 def get_weighted_sampler_via_targeting_lfs(L_train, targeting_lfs_idx, upweight_multiplier):

@@ -263,7 +263,7 @@ def train_models(
         # create dataloader
         train_dataset = (
             SyntheticDataset(Xs[0], Y_weak, Ls[0]) if config["train_on_L"]
-            else SyntheticDataset(Xs[0], Ys[0])
+            else SyntheticDataset(Xs[0], Y_weak)
         )
 
         multiplier = config.get("upsample_lf0_multiplier", None)

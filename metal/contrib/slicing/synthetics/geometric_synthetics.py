@@ -26,6 +26,7 @@ def generate_dataset(
     Z_kwargs={"num_slices": 4, "min_a": 1, "max_a": 2},
     point_size=1.0,
     plotting=True,
+    return_targeting_lfs=False
 ):
     # Create canvas
     canvas = Rectangle(0, 10, 0, 10)
@@ -37,7 +38,6 @@ def generate_dataset(
     L, lf_regions = create_lfs(X, Y, m, **L_kwargs)
     # Create slices
     Z, slice_regions = create_slices(X, Y, lf_regions, **Z_kwargs)
-
     if plotting:
         plot_all(L, X, Y, Z)
 
@@ -47,7 +47,16 @@ def generate_dataset(
     assert isinstance(Y, np.ndarray)
     assert isinstance(Z, np.ndarray)
 
-    return L, X, Y, Z
+
+    if return_targeting_lfs:
+        lfs_targeting_regions = []
+        for region in slice_regions:
+            lf_targeting_region = [lf_region.center() == region.center() for lf_region in lf_regions]
+            lf_idx = lf_targeting_region.index(True)
+            lfs_targeting_regions.append(lf_idx)
+        return L, X, Y, Z, lfs_targeting_regions
+    else:
+        return L, X, Y, Z
 
 
 # BUILDING BLOCKS
