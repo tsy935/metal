@@ -5,6 +5,11 @@ from termcolor import colored
 from torch.utils.data.sampler import WeightedRandomSampler
 from metal.metrics import metric_score, accuracy_score
 
+
+def slice_mask_from_targeting_lfs_idx(L, targeting_lfs_idx):
+    return np.sum(L[:, targeting_lfs_idx], axis=1) > 0
+
+
 def get_weighted_sampler_via_targeting_lfs(L_train, targeting_lfs_idx, upweight_multiplier):
     """ Creates a weighted sampler that upweights values based on whether they are targeted
     by LFs. Intuitively, upweights examples that might be "contributing" to slice performance,
@@ -20,7 +25,7 @@ def get_weighted_sampler_via_targeting_lfs(L_train, targeting_lfs_idx, upweight_
     
     """
         
-    upweighting_mask = np.sum(L_train[:, targeting_lfs_idx], axis=1) > 0
+    upweighting_mask = slice_mask_from_targeting_lfs_idx(L_train, targeting_lfs_idx)
     weights = np.ones(upweighting_mask.shape)
     weights[upweighting_mask] = upweight_multiplier
     num_samples = int(sum(weights))

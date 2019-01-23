@@ -10,11 +10,17 @@ from metal.contrib.slicing.online_dp import MLPModule
 import torch.nn as nn
 import torch.nn.functional as F
 
-def trainMoE(Xs, Ys, Ls, dataset_class=None, *kwargs):
+def trainMoE(model_config, Xs, Ys, Ls, dataset_class=None, *kwargs):
     X_train, X_dev = tuple(Xs)
     Y_train, Y_dev = tuple(Ys)
     L_train, L_dev = tuple(Ls)
     
+    base_model_class = model_config["base_model_class"]
+    base_model_init_kwargs = model_config["base_model_init_kwargs"]
+    input_module_class = model_config["input_module_class"]
+    input_module_init_kwargs = model_config["input_module_init_kwargs"]
+
+
     trained_models = {}
     
     # treat each LF as an expert
@@ -26,17 +32,10 @@ def trainMoE(Xs, Ys, Ls, dataset_class=None, *kwargs):
         
         print (f"{'-'*10}Training {slice_name}{'-'*10}")
         # initialize expert end model
-        em = EndModel(
-                layer_out_dims=[5,2], 
-                input_module=MLPModule(
-                    input_dim=2, 
-                    middle_dims=[5],
-                    bias=True,
-                    output_dim=5
-                ),
-                verbose=False
-        )
+        input_module = input_module_class(**input_module_init_kwargs)
+        base_model = base_model_class(input_module=input_module, **base_model_init_kwargs)
 
+        # update labels to target slices
         Y_expert_train = Y_train.copy()
         Y_expert_train[slice_mask_train] = 1
         Y_expert_train[np.logical_not(slice_mask_train)] = 2
@@ -54,10 +53,10 @@ def trainMoE(Xs, Ys, Ls, dataset_class=None, *kwargs):
             dev = (X_dev, Y_dev)
 
         # train expert
-        em.train_model(train, dev_data=dev, n_epochs=10, disable_prog_bar=True, verbose=False)
-        score = em.score(dev, verbose=False)
+        base_model.train_model(train, dev_data=dev, n_epochs=10, disable_prog_bar=True, verbose=False)
+        score = base_model.score(dev, verbose=False)
         print (f"Dev Score on L{lf_idx} examples:", score)
-        trained_models[slice_name] = em
+        trained_models[slice_name] = base_model
 
     # train mixture of experts model
     moe = MoEModel(trained_models, d=X_train.shape[1])
