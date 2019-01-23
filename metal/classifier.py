@@ -299,6 +299,7 @@ class Classifier(nn.Module):
                     raise Exception(msg)
 
                 # Backward pass to calculate gradients
+                # Loss is an average loss per example
                 loss.backward()
 
                 # TODO: restore this once it has unit tests
@@ -674,6 +675,7 @@ class Classifier(nn.Module):
                 'random': randomly choose among the tied options
                     NOTE: if break_ties='random', repeated runs may have
                     slightly different results due to difference in broken ties
+                [int]: ties will be broken by using this label
         """
         n, k = Y_s.shape
         Y_h = np.zeros(n)
@@ -689,6 +691,8 @@ class Classifier(nn.Module):
                 Y_h[i] = np.random.choice(max_idxs) + 1
             elif break_ties == "abstain":
                 Y_h[i] = 0
+            elif isinstance(break_ties, int):
+                Y_h[i] = break_ties
             else:
                 ValueError(f"break_ties={break_ties} policy not recognized.")
         return Y_h
