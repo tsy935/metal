@@ -10,7 +10,7 @@ from metal.contrib.slicing.online_dp import MLPModule
 import torch.nn as nn
 import torch.nn.functional as F
 
-def trainMoE(model_config, Xs, Ys, Ls, dataset_class=None, *kwargs):
+def trainMoE(model_config, Xs, Ls, Ys, dataset_class=None, verbose=False, train_kwargs={}):
     X_train, X_dev = tuple(Xs)
     Y_train, Y_dev = tuple(Ys)
     L_train, L_dev = tuple(Ls)
@@ -33,7 +33,7 @@ def trainMoE(model_config, Xs, Ys, Ls, dataset_class=None, *kwargs):
         print (f"{'-'*10}Training {slice_name}{'-'*10}")
         # initialize expert end model
         input_module = input_module_class(**input_module_init_kwargs)
-        base_model = base_model_class(input_module=input_module, **base_model_init_kwargs)
+        base_model = base_model_class(input_module=input_module, verbose=verbose, **base_model_init_kwargs)
 
         # update labels to target slices
         Y_expert_train = Y_train.copy()
@@ -53,8 +53,8 @@ def trainMoE(model_config, Xs, Ys, Ls, dataset_class=None, *kwargs):
             dev = (X_dev, Y_dev)
 
         # train expert
-        base_model.train_model(train, dev_data=dev, n_epochs=10, disable_prog_bar=True, verbose=False)
-        score = base_model.score(dev, verbose=False)
+        base_model.train_model(train, dev_data=dev, n_epochs=10, disable_prog_bar=True, verbose=verbose)
+        score = base_model.score(dev, verbose=verbose)
         print (f"Dev Score on L{lf_idx} examples:", score)
         trained_models[slice_name] = base_model
 
@@ -68,7 +68,7 @@ def trainMoE(model_config, Xs, Ys, Ls, dataset_class=None, *kwargs):
         dev = (X_dev, Y_dev)
         
 
-    moe.train_model(train, dev_data=dev, lr=0.005)
+    moe.train_model(train, dev_data=dev, **train_kwargs)
     return moe
 
 class MoEModel(Classifier):

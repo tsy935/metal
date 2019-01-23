@@ -42,18 +42,20 @@ def compute_lf_accuracies(L_dev, Y_dev):
     return accs
 
 
-def generate_weak_labels(L_train, accs=None, verbose=False, seed=0):
+def generate_weak_labels(L_train, weights=None, verbose=False, seed=0):
     """ Combines L_train into weak labels either using accuracies of LFs or LabelModel.""" 
     L_train_np = L_train.copy()
 
-    if accs is not None:
-        accs = np.array(accs)
-        if np.any(accs==1):
-            print ("Warning: clipping accuracy at 0.95")
-            accs[accs==1] = 0.95
+    if weights is not None:
+        if verbose:
+            print ("Using weights to combine L_train:", weights)
+
+        weights = np.array(weights)
+        if np.any(weights >= 1):
+            weights = weights / np.max(weights + 1e-5) # add epsilon to avoid 1.0 weight
 
         # Combine with weights computed from LF accuracies
-        w = np.log(accs / (1 - accs))
+        w = np.log(weights / (1 - weights))
         w[np.abs(w) == np.inf] = 0  # set weights from acc==0 to 0
 
         # L_train_pt = torch.from_numpy(L_train.astype(np.float32))
@@ -63,12 +65,11 @@ def generate_weak_labels(L_train, accs=None, verbose=False, seed=0):
         Y_weak = np.concatenate((label_probs, 1 - label_probs), axis=1)
     else:
         if verbose:
-            print("Training MeTaL label model...")
-        from metal.label_model import LabelModel
+            print("Training Snorkel label model...")
+        from metal.contrib.backends.snorkel_gm_wrapper import SnorkelLabelModel as LabelModel
 
-        label_model = LabelModel(k=2, seed=seed)
-        L_train_np[L_train_np == -1] = 2
-        label_model.train_model(L_train_np, n_epochs=500, print_every=25, verbose=verbose)
+        label_model = LabelModel()
+        label_model.train_model(L_train_np.astype(np.int8))
         Y_weak = label_model.predict_proba(L_train)
 
     return Y_weak
