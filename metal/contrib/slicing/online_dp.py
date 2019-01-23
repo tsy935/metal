@@ -289,11 +289,13 @@ class SliceHatModel(EndModel):
         if self.has_L_head:
             L_logits = self.L_head(neck)
             # Weight loss by lf weights if applicable and mask abstains
-            L_loss_masked = self.L_criteria(L_logits, L.float()).masked_fill(
-                abstains, 0
+            L_loss_masked = (
+                self.L_criteria(L_logits, L.float())
+                .masked_fill(abstains, 0)
+                .sum(dim=1)
             )
             # Get average L loss by example per lf
-            L_loss = torch.mean(L_loss_masked) / self.m
+            L_loss = torch.mean(L_loss_masked, dim=0) / self.m
         else:
             L_loss = 0
 
@@ -309,9 +311,9 @@ class SliceHatModel(EndModel):
     def forward_Y_off(self, X, L_logits=None):
         """Returns the logits of the offline Y_head"""
         neck = self.body(X)
-        if not L_logits:
-            L_logits = self.L_head(neck)
         if self.reweight:
+            if not L_logits:
+                L_logits = self.L_head(neck)
             # A is the [batch_size, m] Tensor representing the amount of
             # attention to pay to each head (based on each ones' confidence)
             A = F.softmax(abs(L_logits), dim=1)
