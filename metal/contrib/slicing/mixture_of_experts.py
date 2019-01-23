@@ -17,8 +17,8 @@ def trainMoE(model_config, Xs, Ls, Ys, dataset_class=None, verbose=False, train_
     
     base_model_class = model_config["base_model_class"]
     base_model_init_kwargs = model_config["base_model_init_kwargs"]
-    input_module_class = model_config["input_module_class"]
-    input_module_init_kwargs = model_config["input_module_init_kwargs"]
+#    input_module_class = model_config["input_module_class"]
+#    input_module_init_kwargs = model_config["input_module_init_kwargs"]
 
 
     trained_models = {}
@@ -32,8 +32,8 @@ def trainMoE(model_config, Xs, Ls, Ys, dataset_class=None, verbose=False, train_
         
         print (f"{'-'*10}Training {slice_name}{'-'*10}")
         # initialize expert end model
-        input_module = input_module_class(**input_module_init_kwargs)
-        base_model = base_model_class(input_module=input_module, verbose=verbose, **base_model_init_kwargs)
+#        input_module = input_module_class(**input_module_init_kwargs)
+        base_model = base_model_class(verbose=verbose, **base_model_init_kwargs)
 
         # update labels to target slices
         Y_expert_train = Y_train.copy()

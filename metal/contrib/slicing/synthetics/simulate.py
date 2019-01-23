@@ -248,12 +248,12 @@ def train_models(
         base_model_class = config["base_model_class"]
         base_model_init_kwargs = config["base_model_init_kwargs"]
         base_model_init_kwargs.update({"m": Ls[0].shape[1]}) # get m from L dim
-        input_module_class = config["input_module_class"]
-        input_module_init_kwargs = config["input_module_init_kwargs"]
+#        input_module_class = config["input_module_class"]
+#        input_module_init_kwargs = config["input_module_init_kwargs"]
 
         # init base model (i.e. EndModel or SliceDPModel)
         model = base_model_class(
-            input_module=input_module_class(**input_module_init_kwargs),
+#            input_module=input_module_class(**input_module_init_kwargs),
             **base_model_init_kwargs,
             verbose=verbose,
             use_cuda=use_cuda,
