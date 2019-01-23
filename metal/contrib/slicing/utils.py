@@ -8,6 +8,7 @@ def evaluate_slicing(
     eval_loader,
     metrics=["accuracy", "precision", "recall", "f1"],
     verbose=True,
+    break_ties="random",
 ):
     """
     Args:
@@ -35,7 +36,7 @@ def evaluate_slicing(
         Y_slice = Y[inds]
 
         metrics_slice = model.score(
-            (X_slice, Y_slice), metrics, verbose=verbose
+            (X_slice, Y_slice), metrics, verbose=verbose, break_ties=break_ties
         )
 
         out_dict[f"slice_{s}"] = {

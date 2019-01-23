@@ -202,7 +202,7 @@ class SliceDPModel(EndModel):
 
 
 class SliceHatModel(EndModel):
-    """A model which converts a vanilla end-model into a slice-aware model
+    """A model which makes a base single-task EndModel slice-aware
 
     Args:
         model: an instantiated EndModel (it will be copied and reinitialized)
@@ -214,21 +214,12 @@ class SliceHatModel(EndModel):
     """
 
     def __init__(
-        self,
-        model,
-        m,
-        slice_weight=0.1,
-        reweight=True,
-        L_weights=None,
-        **kwargs
+        self, base_model, m, slice_weight=0.1, reweight=True, **kwargs
     ):
         config = recursive_merge_dicts(
             em_default_config, kwargs, misses="insert"
         )
-        # Can't assign modules until after initialization
-        Y_head_off = model.network[-1]
-        neck_dim = Y_head_off.in_features
-        k = Y_head_off.out_features
+        k = base_model.network[-1].out_features
         if k != 2:
             raise Exception("SliceHatModel is currently only valid for k=2.")
 
@@ -238,25 +229,28 @@ class SliceHatModel(EndModel):
         self.m = m
         self.slice_weight = slice_weight
         self.reweight = reweight
-        self.neck_dim = neck_dim
-        self.body = copy.deepcopy(model.network[:-1])
-        if config["verbose"]:
+        self.build_model(base_model)
+
+        # Show network
+        if self.config["verbose"]:
+            print(self)
+            print()
+
+    def build_model(self, base_model):
+        Y_head_off = base_model.network[-1]
+        neck_dim = Y_head_off.in_features
+        self.body = copy.deepcopy(base_model.network[:-1])
+        if self.config["verbose"]:
             print("Resetting base model parameters")
         self.body.apply(reset_parameters)
 
-        self.has_L_head = slice_weight > 0
-        self.has_Y_head = slice_weight < 1
+        self.has_L_head = self.slice_weight > 0
+        self.has_Y_head = self.slice_weight < 1
 
         if self.has_L_head:
             # No bias on L-head; we only want the weights
-            self.L_head = nn.Linear(self.neck_dim, self.m, bias=False)
+            self.L_head = nn.Linear(neck_dim, self.m, bias=False)
             self.L_criteria = nn.BCEWithLogitsLoss(reduction="none")
-
-            # For manual reweighting. Default to all ones.
-            if L_weights is None:
-                self.L_weights = torch.ones(self.m).reshape(-1, 1)
-            else:
-                self.L_weights = torch.from_numpy(L_weights).reshape(-1, 1)
 
         if self.has_Y_head:
             print(
@@ -272,11 +266,6 @@ class SliceHatModel(EndModel):
             else:
                 self.Y_head_off = nn.Linear(neck_dim, 1)
             self.Y_criteria = nn.BCEWithLogitsLoss(reduction="elementwise_mean")
-
-        # Show network
-        if self.config["verbose"]:
-            print(self)
-            print()
 
     def _get_loss_fn(self):
         return self._loss
@@ -303,9 +292,8 @@ class SliceHatModel(EndModel):
             L_loss_masked = self.L_criteria(L_logits, L.float()).masked_fill(
                 abstains, 0
             )
-            L_loss_weighted = L_loss_masked @ self.L_weights
             # Get average L loss by example per lf
-            L_loss = torch.mean(L_loss_weighted) / self.m
+            L_loss = torch.mean(L_loss_masked) / self.m
         else:
             L_loss = 0
 
