@@ -1,12 +1,14 @@
+import copy
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from metal.classifier import Classifier
 from metal.end_model.em_defaults import em_default_config
 from metal.end_model.end_model import EndModel
 from metal.end_model.loss import SoftCrossEntropyLoss
-from metal.metrics import metric_score
 from metal.utils import recursive_merge_dicts
 
 
@@ -20,7 +22,7 @@ class LinearModule(nn.Module):
 
 
 class MLPModule(nn.Module):
-    def __init__(self, input_dim, output_dim, middle_dims=[], bias=False):
+    def __init__(self, input_dim, output_dim, middle_dims=[], bias=True):
         super().__init__()
 
         # Create layers
@@ -73,7 +75,7 @@ class SliceDPModel(EndModel):
         self.output_dim = 2  # NOTE: Fixed for binary setting
         self.slice_weight = slice_weight
 
-        # No bias-- only learn weights for L_head
+        # No bias -- only learn weights for L_head
         head_module = nn.Linear(self.r, self.m, bias=False)
 
         # default to removing nonlinearities from input_layer output
@@ -119,7 +121,7 @@ class SliceDPModel(EndModel):
 
         # Attach the "DP head" which outputs the final prediction
         y_d = 2 * self.r if self.reweight else self.r
-        self.Y_head = nn.Linear(y_d, self.output_dim, bias=False)
+        self.Y_head = nn.Linear(y_d, self.output_dim)
 
         if self.config["use_cuda"]:
             # L_weights: how much to weight the loss for each L_head
@@ -158,7 +160,8 @@ class SliceDPModel(EndModel):
         masked_Y_loss = (
             self.criteria_Y(self.forward_Y(X), Y_weak) * dp_head_mask
         )
-        loss_2 = torch.mean(masked_Y_loss)
+        # print("WARNING: now summing loss i/o average")
+        loss_2 = torch.sum(masked_Y_loss)
 
         # Compute the weighted sum of these
         loss_1 /= self.m  # normalize by number of LFs
@@ -196,3 +199,159 @@ class SliceDPModel(EndModel):
     def predict_proba(self, x):
         with torch.no_grad():
             return F.softmax(self.forward_Y(x)).data.cpu().numpy()
+
+
+class SliceHatModel(EndModel):
+    """A model which converts a vanilla end-model into a slice-aware model
+
+    Args:
+        model: an instantiated EndModel (it will be copied and reinitialized)
+        m: the number of labeling functions
+        slice_weight: a float in [0,1]; how much the L_loss matters
+            0: there is no L head (it is a vanilla EndModel)
+            1: there is no Y head (it learns only to predict Ys)
+        reweight: (bool) if True, use attention to reweight the neck
+    """
+
+    def __init__(
+        self,
+        model,
+        m,
+        slice_weight=0.1,
+        reweight=True,
+        L_weights=None,
+        **kwargs
+    ):
+        config = recursive_merge_dicts(
+            em_default_config, kwargs, misses="insert"
+        )
+        # Can't assign modules until after initialization
+        Y_head_off = model.network[-1]
+        neck_dim = Y_head_off.in_features
+        k = Y_head_off.out_features
+        if k != 2:
+            raise Exception("SliceHatModel is currently only valid for k=2.")
+
+        # Leap frog EndModel initialization (`model` is already initialized)
+        Classifier.__init__(self, k=k, config=config)
+
+        self.m = m
+        self.slice_weight = slice_weight
+        self.reweight = reweight
+        self.neck_dim = neck_dim
+        self.body = copy.deepcopy(model.network[:-1])
+        if config["verbose"]:
+            print("Resetting base model parameters")
+        self.body.apply(reset_parameters)
+
+        self.has_L_head = slice_weight > 0
+        self.has_Y_head = slice_weight < 1
+
+        if self.has_L_head:
+            # No bias on L-head; we only want the weights
+            self.L_head = nn.Linear(self.neck_dim, self.m, bias=False)
+            self.L_criteria = nn.BCEWithLogitsLoss(reduction="none")
+
+            # For manual reweighting. Default to all ones.
+            if L_weights is None:
+                self.L_weights = torch.ones(self.m).reshape(-1, 1)
+            else:
+                self.L_weights = torch.from_numpy(L_weights).reshape(-1, 1)
+
+        if self.has_Y_head:
+            print(
+                "Warning: breaking MeTaL convention and using 1-dim output "
+                "when k=2"
+            )
+            if self.reweight:
+                if not self.has_L_head:
+                    msg = "Cannot reweight neck if no L_head is present."
+                    raise Exception(msg)
+                # If reweighting, Y_head sees original rep and reweighted one
+                self.Y_head_off = nn.Linear(2 * neck_dim, 1)
+            else:
+                self.Y_head_off = nn.Linear(neck_dim, 1)
+            self.Y_criteria = nn.BCEWithLogitsLoss(reduction="elementwise_mean")
+
+        # Show network
+        if self.config["verbose"]:
+            print(self)
+            print()
+
+    def _loss(self, X, L, Y_s):
+        """Returns the average loss per example"""
+        # For efficiency, L would be converted to {-1,0,1} before being passed
+        # into the model; for consistency in the code, we leave L in {0,1,2}
+        # wherever the user deals with it.
+
+        abstains = L == 0
+        # To turn off masking:
+        # abstains = torch.ones_like(L).byte()
+
+        L = L.clone()
+        L[L == 0] = 0.5  # Abstains are ambivalent (0 logit)
+        L[L == 2] = 0  # 2s are negative class
+
+        neck = self.body(X)
+
+        if self.has_L_head:
+            L_logits = self.L_head(neck)
+            # Weight loss by lf weights if applicable and mask abstains
+            L_loss_masked = self.L_criteria(L_logits, L.float()).masked_fill(
+                abstains, 0
+            )
+            L_loss_weighted = L_loss_masked @ self.L_weights
+            # Get average L loss by example per lf
+            L_loss = torch.mean(L_loss_weighted) / self.m
+        else:
+            L_loss = 0
+
+        if self.has_Y_head:
+            Y_logits = self.forward_Y_off(X)
+            Y_loss = self.Y_criteria(Y_logits.squeeze(), Y_s[:, 0].float())
+        else:
+            Y_loss = 0
+
+        loss = (self.slice_weight * L_loss) + ((1 - self.slice_weight) * Y_loss)
+        return loss
+
+    def forward_Y_off(self, X, L_logits=None):
+        neck = self.body(X)
+        if not L_logits:
+            L_logits = self.L_head(neck)
+        if self.reweight:
+            # A is the [batch_size, m] Tensor representing the amount of
+            # attention to pay to each head (based on each ones' confidence)
+            A = F.softmax(abs(L_logits), dim=1)
+            # W is the [r, m] linear mapping that transforms the neck into
+            # logits for the L heads
+            W = self.L_head.weight
+            # R is the [r, 1] neck (representation vector) that would
+            # normally go into the Y head
+            R = neck
+            # We reweight the linear mappings W by the attention scores A
+            # and use this to create a reweighted representation S
+            S = (A @ W) * R
+            # Concatentate these into a single input for the Y_head
+            neck = torch.cat((R, S), 1)
+        return self.Y_head_off(neck)
+
+    def _get_loss_fn(self):
+        return self._loss
+
+    @torch.no_grad()
+    def predict_L_proba(self, X):
+        """A convenience function that predicts L probabilities"""
+        return F.sigmoid(self.L_head(self.body(X)))
+
+    @torch.no_grad()
+    def predict_proba(self, X):
+        preds = F.sigmoid(self.forward_Y_off(X)).data.cpu().numpy()
+        return np.hstack((preds, 1 - preds))
+
+
+def reset_parameters(m):
+    try:
+        m.reset_parameters()
+    except AttributeError:
+        pass

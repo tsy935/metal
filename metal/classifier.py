@@ -299,6 +299,7 @@ class Classifier(nn.Module):
                     raise Exception(msg)
 
                 # Backward pass to calculate gradients
+                # Loss is an average loss per example
                 loss.backward()
 
                 # TODO: restore this once it has unit tests
