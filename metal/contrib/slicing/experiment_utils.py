@@ -7,6 +7,7 @@ from tqdm import tqdm
 from metal.contrib.slicing.online_dp import SliceHatModel
 from metal.contrib.slicing.utils import generate_weak_labels
 from metal.end_model import EndModel
+from metal.tuners.tuner import ModelTuner
 from metal.utils import SlicingDataset
 
 
@@ -156,14 +157,41 @@ def separate_eval_loader(data_loader):
     return X, Y, Z
 
 
-# def search_upweighting_models(
-# config, train_loader, dev_loader, m, targeting_lfs_idx
-# ):
+def search_upweighting_models(config, Ls, Xs, Ys, Zs, m, targeting_lfs_idx):
 
-# for multiplier in [2, 3]:
-#     L_weights = np.ones(m)
-#     L_weights[targeting_lfs_idx] = multiplier
-#     L_weights = list(L_weights)
-#     train_ds, dev_ds, _ = create_data_loaders(
-#         Ls, Xs, Ys, Zs, config, L_weights
-#     )
+    # init model
+    model = EndModel(**config["end_model_init_kwargs"])
+    search_space = config["upweight_search_space"]
+    max_search = config.get("max_search")
+
+    # initialize datasets
+    dev_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "dev")
+
+    # generate L_weight multipliers based on config search space
+    best_model = None
+    best_score = -1
+    for search_config in ModelTuner.config_generator(
+        {"multiplier": search_space}, max_search
+    ):
+        # upweight label matrix at LFs targeting the slice
+        L_weights = np.ones(m)
+        L_weights[targeting_lfs_idx] = search_config["multiplier"]
+        L_weights = list(L_weights)
+
+        train_loader = create_data_loader(
+            Ls, Xs, Ys, Zs, config, "train", L_weights
+        )
+
+        train_kwargs = config.get("train_kwargs", {})
+        train_kwargs["disable_prog_bar"] = True
+        model.train_model(train_loader, dev_data=dev_loader, **train_kwargs)
+        score = model.score(dev_loader)
+        if score > best_score:
+            # TODO: save model with best slice-specific scores.. but need to define which slice
+            print(
+                f"Saving model with L_weight multiplier {search_config['multiplier']}"
+            )
+            best_score = score
+            best_model = model
+
+    return best_model
