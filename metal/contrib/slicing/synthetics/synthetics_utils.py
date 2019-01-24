@@ -343,7 +343,7 @@ def generate_synthetic_data(config, x_var=None, x_val=None, verbose=False):
         config["props"],
         config["labels"],
         config["variances"],
-        config.get("mv_normal", True)
+        config.get("mv_normal", True),
     )
 
     if config["head_config"]:
