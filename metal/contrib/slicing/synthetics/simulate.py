@@ -1,5 +1,5 @@
 """Runs simulations over equal weights, manual reweighting,
-        
+
 t_pred
     plt.title('EndModel')
     plot_predictions(X_test, Y_test, end_model)
@@ -24,24 +24,27 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader
 from synthetics_utils import generate_synthetic_data
-from visualization_utils import plot_slice_scores, visualize_data, compare_prediction_plots
+from torch.utils.data import DataLoader
+from visualization_utils import (
+    compare_prediction_plots,
+    plot_slice_scores,
+    visualize_data,
+)
 
 from metal.contrib.logging.tensorboard import TensorBoardWriter
 from metal.contrib.slicing.experiment_utils import (
-    generate_weak_labels,
     compute_lf_accuracies,
-    get_weighted_sampler_via_targeting_lfs
+    generate_weak_labels,
+    get_weighted_sampler_via_targeting_lfs,
 )
+from metal.contrib.slicing.mixture_of_experts import trainMoE
 from metal.contrib.slicing.online_dp import (
     LinearModule,
     MLPModule,
     SliceDPModel,
 )
-from metal.contrib.slicing.mixture_of_experts import trainMoE
 from metal.end_model import EndModel
-
 
 # Import tqdm_notebook if in Jupyter notebook
 try:
@@ -189,10 +192,10 @@ class SyntheticDataset(torch.utils.data.Dataset):
     def __init__(self, X, Y, L=None):
         self.X = X
         if len(Y.shape) == 1:
-            print ("Y is one dimensional. Converting to cat labels")
+            print("Y is one dimensional. Converting to cat labels")
             Y_cat = np.zeros((Y.shape[0], 2))
-            Y_cat[:,0] = Y == 1
-            Y_cat[:,1] = Y == 2
+            Y_cat[:, 0] = Y == 1
+            Y_cat[:, 1] = Y == 2
             self.Y = Y_cat.astype(np.float32)
         else:
             self.Y = Y.astype(np.float32)
@@ -219,76 +222,8 @@ def train_models(
     use_cuda=False,
     seed=123,
 ):
-    """
-    Trains baseline, oracle, and attention model
-    Args:
-        - Xs: (X_train, X_dev)
-        - Ys: (Y_train, Y_dev)
-        - Ls: (L_train, L_dev)
-        - model_configs: dictionary mapping model_name:init/train_config
-        - train_kwargs: kwargs to be passed to each model for training
-    Returns:
-        - dict of {model_name: trained_model}
-    """
-    trained_models = {}
-    for model_name, config in model_configs.items():
-        if verbose:
-            print("-" * 10, f"Training {model_name}", "-" * 10)
+    raise Exception("Use the new version in experiment_utils!")
 
-        # generate weak labels
-        assert isinstance(config["L_weights"], list) or config["L_weights"] is None
-        Y_weak = generate_weak_labels(Ls[0], config["L_weights"])
-        Ys = (Y_weak, Y_dev)
-
-        if config.get("mixture_of_experts", False):
-            MoE = trainMoE(config, Xs, Ls, Ys, verbose=verbose, train_kwargs=train_kwargs)
-            trained_models[model_name] = MoE
-            continue
-
-        base_model_class = config["base_model_class"]
-        base_model_init_kwargs = config["base_model_init_kwargs"]
-        base_model_init_kwargs.update({"m": Ls[0].shape[1]}) # get m from L dim
-#        input_module_class = config["input_module_class"]
-#        input_module_init_kwargs = config["input_module_init_kwargs"]
-
-        # init base model (i.e. EndModel or SliceDPModel)
-        model = base_model_class(
-#            input_module=input_module_class(**input_module_init_kwargs),
-            **base_model_init_kwargs,
-            verbose=verbose,
-            use_cuda=use_cuda,
-            seed=seed,
-        )
-
-        # create dataloader
-        train_dataset = (
-            SyntheticDataset(Xs[0], Y_weak, Ls[0]) if config["train_on_L"]
-            else SyntheticDataset(Xs[0], Y_weak)
-        )
-
-        multiplier = config.get("upsample_lf0_multiplier", None)
-        if multiplier:
-            sampler = get_weighted_sampler_via_targeting_lfs(Ls[0], [0], multiplier)
-        else:
-            sampler = None
-
-        train_loader = DataLoader(
-            train_dataset, 
-            batch_size=train_kwargs.get("batch_size", 32),
-            num_workers=1,
-            sampler=sampler
-        )
-        # train model
-        model.train_model(
-            train_loader,
-            dev_data=(Xs[1], Ys[1]),
-            **train_kwargs,
-        )
-
-        # collect trained models in dict
-        trained_models[model_name] = model
-
-    return trained_models
 
 def eval_model(model, data, eval_dict):
     """Evaluates models according to indexes in 'eval_dict'
@@ -362,18 +297,36 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
             Y = Y.astype(np.float32)
 
             train_end_idx = int(len(X) * experiment_config["train_prop"])
-            dev_end_idx = train_end_idx + int(len(X) * experiment_config["dev_prop"])
+            dev_end_idx = train_end_idx + int(
+                len(X) * experiment_config["dev_prop"]
+            )
 
-            X_train, X_dev, X_test = X[:train_end_idx], X[train_end_idx:dev_end_idx], X[dev_end_idx:]
-            Y_train, Y_dev, Y_test = Y[:train_end_idx], Y[train_end_idx:dev_end_idx], Y[dev_end_idx:]
-            C_train, C_dev, C_test = C[:train_end_idx], C[train_end_idx:dev_end_idx], C[dev_end_idx:]
-            L_train, L_dev, L_test = L[:train_end_idx], L[train_end_idx:dev_end_idx], L[dev_end_idx:]
+            X_train, X_dev, X_test = (
+                X[:train_end_idx],
+                X[train_end_idx:dev_end_idx],
+                X[dev_end_idx:],
+            )
+            Y_train, Y_dev, Y_test = (
+                Y[:train_end_idx],
+                Y[train_end_idx:dev_end_idx],
+                Y[dev_end_idx:],
+            )
+            C_train, C_dev, C_test = (
+                C[:train_end_idx],
+                C[train_end_idx:dev_end_idx],
+                C[dev_end_idx:],
+            )
+            L_train, L_dev, L_test = (
+                L[:train_end_idx],
+                L[train_end_idx:dev_end_idx],
+                L[dev_end_idx:],
+            )
 
             test_data = (X_test, Y_test)
 
             trained_models = train_models(
                 (X_train, X_dev),
-                (L_train, L_dev), 
+                (L_train, L_dev),
                 Y_dev,
                 model_configs,
                 experiment_config["train_kwargs"],

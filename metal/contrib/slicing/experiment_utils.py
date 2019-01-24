@@ -1,116 +1,150 @@
-import numpy as np
-from scipy.special import expit
-from scipy.sparse import csr_matrix
-from termcolor import colored
-
-from torch.utils.data.sampler import WeightedRandomSampler
-from metal.metrics import metric_score, accuracy_score
+from metal.utils import SlicingDataset
 
 
-def slice_mask_from_targeting_lfs_idx(L, targeting_lfs_idx):
-    if isinstance(L, csr_matrix):
-        L = np.array(L.todense())
-
-    mask = np.sum(L[:, targeting_lfs_idx], axis=1) > 0
-    return mask.squeeze()
-
-
-def get_weighted_sampler_via_targeting_lfs(L_train, targeting_lfs_idx, upweight_multiplier):
-    """ Creates a weighted sampler that upweights values based on whether they are targeted
-    by LFs. Intuitively, upweights examples that might be "contributing" to slice performance,
-    as defined by label matrix.
-    
-    Args:
-        L_train: label matrix
-        targeting_lfs_idx: list of ints pointing to the columns of the L_matrix
-            that are targeting the slice of interest.
-        upweight_multiplier: multiplier to upweight samples covered by targeting_lfs_idx
-    Returns:
-        WeightedSampler to be pasesd into Dataloader
-    
+def train_models(
+    config,
+    Ls,
+    Xs,
+    Ys,
+    Zs,
+    verbose=False):
     """
-        
-    upweighting_mask = slice_mask_from_targeting_lfs_idx(L_train, targeting_lfs_idx)
-    weights = np.ones(upweighting_mask.shape)
-    weights[upweighting_mask] = upweight_multiplier
-    num_samples = int(sum(weights))
-    return WeightedRandomSampler(weights, num_samples)
+    Generates weak labels and trains a single model
+    Returns:
+        model: a trained model
+    """
+    assert(isinstance(config["L_weights"], list) or config["L_weights"] is None)
+
+    # Generate weak labels:
+    # a) uniform (L_weights = [1,...,1])
+    # b) manual  (L_weights = [1,X,...1])
+    # c) learned (L_weights = None): DP
+    Y_weak = generate_weak_labels(Ls[0], config["L_weights"])
+
+    # Instantiate end model
+    model = EndModel(layer_output)
+
+    # Add slice hat if applicable
+    slice_kwargs = config.get('slice_kwargs')
+    if slice_kwargs:
+        model = SliceHatModel(model, m, **slice_kwargs)
 
 
-def compute_lf_accuracies(L_dev, Y_dev):
-    """ Returns len m list of accuracies corresponding to each lf"""
-    accs = []
-    m = L_dev.shape[1]
-    for lf_idx in range(m):
-        voted_idx = L_dev[:, lf_idx] != 0
-        accs.append(accuracy_score(L_dev[voted_idx, lf_idx], Y_dev[voted_idx]))
-    return accs
+    base_model_class = config["base_model_class"]
+    base_model_init_kwargs = config["base_model_init_kwargs"]
+    train_kwargs = config["train_kwargs"]
+
+    model = base_model_class(
+#            input_module=input_module_class(**input_module_init_kwargs),
+        **base_model_init_kwargs,
+        verbose=verbose,
+        use_cuda=use_cuda,
+        seed=seed,
+    )
+    # Make dataloaders
 
 
-def generate_weak_labels(L_train, weights=None, verbose=False, seed=0):
-    """ Combines L_train into weak labels either using accuracies of LFs or LabelModel.""" 
-    L_train_np = L_train.copy()
 
-    if weights is not None:
-        if verbose:
-            print ("Using weights to combine L_train:", weights)
-
-        weights = np.array(weights)
-        if np.any(weights >= 1):
-            weights = weights / np.max(weights + 1e-5) # add epsilon to avoid 1.0 weight
-
-        # Combine with weights computed from LF accuracies
-        w = np.log(weights / (1 - weights))
-        w[np.abs(w) == np.inf] = 0  # set weights from acc==0 to 0
-
-        # L_train_pt = torch.from_numpy(L_train.astype(np.float32))
-        # TODO: add multiclass support
-        L_train_np[L_train_np == 2] = -1
-        label_probs = expit(2 * L_train_np @ w).reshape(-1, 1)
-        Y_weak = np.concatenate((label_probs, 1 - label_probs), axis=1)
-    else:
-        if verbose:
-            print("Training Snorkel label model...")
-        from metal.contrib.backends.snorkel_gm_wrapper import SnorkelLabelModel as LabelModel
-
-        label_model = LabelModel()
-        label_model.train_model(L_train_np.astype(np.int8))
-        Y_weak = label_model.predict_proba(L_train)
-
-    return Y_weak
+    train_dataset = (
+        SlicingDataset(Xs[0], Y_weak, Ls[0]) if config["train_on_L"]
+        else SyntheticDataset(Xs[0], Y_weak)
+    )
 
 
-def compare_LF_slices(
-    Yp_ours, Yp_base, Y, L_test, LFs, metric="accuracy", delta_threshold=0
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=train_kwargs.get("batch_size", 32),
+        num_workers=1,
+        sampler=sampler
+    )
+
+
+
+
+#        input_module_class = config["input_module_class"]
+#        input_module_init_kwargs = config["input_module_init_kwargs"]
+
+    # init base model (i.e. EndModel or SliceDPModel)
+
+
+
+        # train model
+        model.train_model(
+            train_loader,
+            dev_data=(Xs[1], Ys[1]),
+            **train_kwargs,
+        )
+
+        # collect trained models in dict
+        trained_models[model_name] = model
+
+    return trained_models
+
+
+def eval_model(
+    model,
+    eval_loader,
+    metrics=["accuracy", "precision", "recall", "f1"],
+    verbose=True,
+    break_ties="random",
 ):
-    """Compares improvements between `ours` over `base` predictions."""
+    """
+    Args:
+        model: a trained EndModel (or subclass)
+        eval_loader: a loader containing X, Y, Z
+    """
+    X, Y, Z = separate_eval_loader(eval_loader)
+    out_dict = {}
 
-    improved = 0
-    for LF_num, LF in enumerate(LFs):
-        LF_covered_idx = np.where(L_test[:, LF_num] != 0)[0]
-        ours_score = metric_score(
-            Y[LF_covered_idx], Yp_ours[LF_covered_idx], metric
+    # Evaluating on full dataset
+    if verbose:
+        print(f"All: {len(Z)} examples")
+    metrics_full = model.score((X, Y), metrics, verbose=verbose)
+    out_dict["all"] = {metrics[i]: metrics_full[i] for i in range(len(metrics))}
+
+    # Evaluating on slice
+    slices = sorted(set(Z))
+    for s in slices:
+
+        # Getting indices of points in slice
+        inds = [i for i, e in enumerate(Z) if e == s]
+        if verbose:
+            print(f"\nSlice {s}: {len(inds)} examples")
+        X_slice = X[inds]
+        Y_slice = Y[inds]
+
+        metrics_slice = model.score(
+            (X_slice, Y_slice), metrics, verbose=verbose, break_ties=break_ties
         )
-        base_score = metric_score(
-            Y[LF_covered_idx], Yp_base[LF_covered_idx], metric
-        )
 
-        delta = ours_score - base_score
-        # filter out trivial differences
-        if abs(delta) < delta_threshold:
-            continue
+        out_dict[f"slice_{s}"] = {
+            metrics[i]: metrics_slice[i] for i in range(len(metrics_slice))
+        }
 
-        to_print = (
-            f"[{LF.__name__}] delta: {delta:.4f}, "
-            f"OURS: {ours_score:.4f}, BASE: {base_score:.4f}"
-        )
+    print("\nSUMMARY (accuracies):")
+    print(f"All: {out_dict['all']['accuracy']}")
+    for s in slices:
+        print(f"Slice {s}: {out_dict['slice_' + s]['accuracy']}")
 
-        if ours_score > base_score:
-            improved += 1
-            print(colored(to_print, "green"))
-        elif ours_score < base_score:
-            print(colored(to_print, "red"))
-        else:
-            print(to_print)
+    return out_dict
 
-    print(f"improved {improved}/{len(LFs)}")
+
+def separate_eval_loader(data_loader):
+    X = []
+    Y = []
+    Z = []
+
+    # The user passes in a single data_loader and we handle splitting and
+    # recombining
+    for ii, data in tqdm(enumerate(data_loader), total=len(data_loader)):
+        x_batch, y_batch, z_batch = data
+
+        X.append(x_batch)
+        Y.append(y_batch)
+        if isinstance(z_batch, torch.Tensor):
+            z_batch = z_batch.numpy()
+        Z.extend([str(z) for z in z_batch])  # slice labels may be strings
+
+    X = torch.cat(X)
+    Y = torch.cat(Y)
+    return X, Y, Z
