@@ -27,7 +27,11 @@ def generate_dataset(
     point_size=1.0,
     plotting=True,
     return_targeting_lfs=False,
+    seed=None,
 ):
+    if seed:
+        random.seed(seed)
+        np.random.seed(seed)
     # Create canvas
     canvas = Rectangle(0, 10, 0, 10)
     # Create points
@@ -248,9 +252,10 @@ def create_slices(X, Y, lf_regions=None, num_slices=4, min_a=1, max_a=2):
             Z = assign_y(X, Z, region, i + 1)
 
         #  Make sure not slices were totally overwritten
-        satisfied = [z > 20 for z in Counter(Z).values()]
+        satisfied = all(z > 20 for z in Counter(Z).values())
         if not satisfied:
             print("At least one slice was clobbered. Trying again.")
+            Z = np.zeros(n)
 
     return Z, regions
 
