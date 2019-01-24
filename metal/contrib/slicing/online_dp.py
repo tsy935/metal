@@ -254,10 +254,7 @@ class SliceHatModel(EndModel):
             self.L_criteria = nn.BCEWithLogitsLoss(reduction="none")
 
         if self.has_Y_head:
-            print(
-                "Warning: breaking MeTaL convention and using 1-dim output "
-                "when k=2"
-            )
+            # WARNING: breaking MeTaL convention and using 1-dim output when k=2
             if self.reweight:
                 if not self.has_L_head:
                     msg = "Cannot reweight neck if no L_head is present."
