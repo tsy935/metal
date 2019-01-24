@@ -8,8 +8,8 @@ from metal.label_model import LabelModel
 class SnorkelLabelModel(LabelModel):
     """A wrapper that gives the Snorkel generative model a MeTaL interface"""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, k=2, **kwargs):
+        super().__init__(k, **kwargs)
         self.model = GenerativeModel()
 
     def train_model(self, L, **kwargs):
@@ -17,7 +17,7 @@ class SnorkelLabelModel(LabelModel):
         if not issparse(L):
             L = csr_matrix(L)
         L[L == 2] = -1
-        self.model.train(L, verbose=False, **kwargs)
+        self.model.train(L, cardinality=self.k, verbose=False, **kwargs)
 
     def predict_proba(self, L):
         L = L.copy()

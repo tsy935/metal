@@ -21,24 +21,17 @@ def create_data_loader(Ls, Xs, Ys, Zs, model_config, split, L_weights=None):
     Returns:
         (train_dl, dev_dl, test_dl)
     """
-
     assert split in ["train", "dev", "test"]
     assert isinstance(L_weights, list) or L_weights is None
 
+    is_slicing = "slice_kwargs" in model_config.keys()
+
     if split == "train":
-        is_slicing = "slice_kwargs" in model_config.keys()
-
-        # Generate weak labels:
-        # a) uniform (L_weights = [1,...,1])
-        # b) manual  (L_weights = [1,X,...1])
-        # c) learned (L_weights = None): DP
-        L_train = Ls[0].toarray() if isinstance(Ls[0], csr_matrix) else Ls[0]
-        Y_weak = generate_weak_labels(L_train, L_weights)
-
+        L_train = torch.Tensor(Ls[0].todense())
         dataset = (
-            SlicingDataset(Xs[0], L_train, Y_weak)
+            SlicingDataset(Xs[0], L_train, Ys[0])
             if is_slicing
-            else SlicingDataset(Xs[0], Y_weak)
+            else SlicingDataset(Xs[0], Ys[0])
         )
         shuffle = True
 
@@ -90,6 +83,7 @@ def eval_model(
     eval_loader,
     metrics=["accuracy", "precision", "recall", "f1"],
     verbose=True,
+    summary=True,
     break_ties="random",
 ):
     """
@@ -125,10 +119,11 @@ def eval_model(
             metrics[i]: metrics_slice[i] for i in range(len(metrics_slice))
         }
 
-    print("\nSUMMARY (accuracies):")
-    print(f"All: {out_dict['all']['accuracy']}")
-    for s in slices:
-        print(f"Slice {s}: {out_dict['slice_' + s]['accuracy']}")
+    if summary:
+        print("\nSUMMARY (accuracies):")
+        print(f"All: {out_dict['all']['accuracy']}")
+        for s in slices:
+            print(f"Slice {s}: {out_dict['slice_' + s]['accuracy']}")
 
     return out_dict
 
@@ -140,7 +135,7 @@ def separate_eval_loader(data_loader):
 
     # The user passes in a single data_loader and we handle splitting and
     # recombining
-    for ii, data in tqdm(enumerate(data_loader), total=len(data_loader)):
+    for ii, data in enumerate(data_loader):
         x_batch, y_batch, z_batch = data
 
         X.append(x_batch)
@@ -154,7 +149,9 @@ def separate_eval_loader(data_loader):
     return X, Y, Z
 
 
-def search_upweighting_models(config, Ls, Xs, Ys, Zs, targeting_lfs_idx):
+def search_upweighting_models(
+    config, Ls, Xs, Ys, Zs, targeting_lfs_idx, verbose=False
+):
 
     # init model
     model = EndModel(**config["end_model_init_kwargs"])
@@ -183,12 +180,13 @@ def search_upweighting_models(config, Ls, Xs, Ys, Zs, targeting_lfs_idx):
         train_kwargs = config.get("train_kwargs", {})
         train_kwargs["disable_prog_bar"] = True
         model.train_model(train_loader, dev_data=dev_loader, **train_kwargs)
-        score = model.score(dev_loader)
+        score = model.score(dev_loader, verbose=verbose)
         if score > best_score:
             # TODO: save model with best slice-specific scores.. but need to define which slice
-            print(
-                f"Saving model with L_weight multiplier {search_config['multiplier']}"
-            )
+            if verbose:
+                print(
+                    f"Saving model with L_weight multiplier {search_config['multiplier']}"
+                )
             best_score = score
             best_model = model
 

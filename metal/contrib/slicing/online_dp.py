@@ -216,8 +216,9 @@ class SliceHatModel(EndModel):
     def __init__(
         self, base_model, m, slice_weight=0.1, reweight=True, **kwargs
     ):
+        # NOTE: rather than using em_default_config, we use base_model.config
         config = recursive_merge_dicts(
-            em_default_config, kwargs, misses="insert"
+            base_model.config, kwargs, misses="insert"
         )
         k = base_model.network[-1].out_features
         if k != 2:
@@ -333,11 +334,11 @@ class SliceHatModel(EndModel):
     @torch.no_grad()
     def predict_L_proba(self, X):
         """A convenience function that predicts L probabilities"""
-        return F.sigmoid(self.L_head(self.body(X)))
+        return torch.sigmoid(self.L_head(self.body(X)))
 
     @torch.no_grad()
     def predict_proba(self, X):
-        preds = F.sigmoid(self.forward_Y_off(X)).data.cpu().numpy()
+        preds = torch.sigmoid(self.forward_Y_off(X)).data.cpu().numpy()
         return np.hstack((preds, 1 - preds))
 
 

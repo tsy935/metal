@@ -13,7 +13,7 @@ from metal.end_model.loss import SoftCrossEntropyLoss
 from metal.utils import hard_to_soft, recursive_merge_dicts
 
 
-def train_MoE_model(config, Ls, Xs, Ys, Zs):
+def train_MoE_model(config, Ls, Xs, Ys, Zs, verbose=False):
     """
     Treats each LF as an "expert", and trains a separate model for each LF.
     Then, freezes models and combines predictions with a separate gating network.
@@ -33,7 +33,8 @@ def train_MoE_model(config, Ls, Xs, Ys, Zs):
         slice_mask_dev = slice_mask_from_targeting_lfs_idx(Ls[1], [lf_idx])
         slice_name = f"slice_{lf_idx}_expert"
 
-        print(f"{'-'*10}Training {slice_name}{'-'*10}")
+        if verbose:
+            print(f"{'-'*10}Training {slice_name}{'-'*10}")
         # initialize expert end model
         expert = EndModel(**config["end_model_init_kwargs"])
 
@@ -55,14 +56,10 @@ def train_MoE_model(config, Ls, Xs, Ys, Zs):
 
         # train expert
         expert_kwargs = config.get("expert_train_kwargs", {})
-        expert.train_model(
-            train_loader,
-            dev_data=dev_loader,
-            disable_prog_bar=True,
-            **expert_kwargs,
-        )
-        score = expert.score(dev_loader)
-        print(f"Dev Score on L{lf_idx} examples:", score)
+        expert.train_model(train_loader, dev_data=dev_loader, **expert_kwargs)
+        score = expert.score(dev_loader, verbose=verbose)
+        if verbose:
+            print(f"Dev Score on L{lf_idx} examples:", score)
         trained_experts[slice_name] = expert
 
     # now, train mixture of experts model on FULL data
@@ -140,7 +137,7 @@ class MoEModel(Classifier):
         return self._loss
 
     def predict_proba(self, X):
-        return F.softmax(self.weighted_experts(X)).detach().numpy()
+        return F.softmax(self.weighted_experts(X), dim=0).detach().numpy()
 
     def train_model(self, train_data, dev_data=None, log_writer=None, **kwargs):
         self.config = recursive_merge_dicts(self.config, kwargs)
