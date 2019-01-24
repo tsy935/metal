@@ -9,6 +9,13 @@ from tqdm import tqdm
 from metal.metrics import accuracy_score, metric_score
 
 
+def get_L_weights_from_targeting_lfs_idx(m, targeting_lfs_idx, multiplier):
+    L_weights = np.ones(m)
+    L_weights[targeting_lfs_idx] = multiplier
+    L_weights = list(L_weights)
+    return L_weights
+
+
 def slice_mask_from_targeting_lfs_idx(L, targeting_lfs_idx):
     if isinstance(L, csr_matrix):
         L = np.array(L.todense())
@@ -80,7 +87,7 @@ def generate_weak_labels(L_train, weights=None, verbose=False, seed=0):
         if verbose:
             print("Training Snorkel label model...")
         from metal.contrib.backends.snorkel_gm_wrapper import (
-            SnorkelLabelModel as LabelModel
+            SnorkelLabelModel as LabelModel,
         )
 
         label_model = LabelModel()

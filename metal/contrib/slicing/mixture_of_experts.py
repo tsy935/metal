@@ -4,84 +4,76 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from metal.classifier import Classifier
-from metal.contrib.slicing.experiment_utils import (
-    slice_mask_from_targeting_lfs_idx
-)
+from metal.contrib.slicing.experiment_utils import create_data_loader
 from metal.contrib.slicing.online_dp import MLPModule
+from metal.contrib.slicing.utils import slice_mask_from_targeting_lfs_idx
 from metal.end_model import EndModel
 from metal.end_model.em_defaults import em_default_config
 from metal.end_model.loss import SoftCrossEntropyLoss
 from metal.utils import hard_to_soft, recursive_merge_dicts
 
 
-def trainMoE(
-    model_config, Xs, Ls, Ys, dataset_class=None, verbose=False, train_kwargs={}
-):
-    X_train, X_dev = tuple(Xs)
-    Y_train, Y_dev = tuple(Ys)
-    L_train, L_dev = tuple(Ls)
+def train_MoE_model(config, Ls, Xs, Ys, Zs):
+    """
+    Treats each LF as an "expert", and trains a separate model for each LF.
+    Then, freezes models and combines predictions with a separate gating network.
+    """
 
-    base_model_class = model_config["base_model_class"]
-    base_model_init_kwargs = model_config["base_model_init_kwargs"]
-    #    input_module_class = model_config["input_module_class"]
-    #    input_module_init_kwargs = model_config["input_module_init_kwargs"]
+    # Create data loaders
+    train_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "train")
+    dev_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "dev")
 
-    trained_models = {}
+    # keep track of experts trained
+    trained_experts = {}
 
     # treat each LF as an expert
-    m = L_train.shape[1]
+    m = Ls[0].shape[1]
     for lf_idx in range(m):
-        slice_mask_train = slice_mask_from_targeting_lfs_idx(L_train, [lf_idx])
-        slice_mask_dev = slice_mask_from_targeting_lfs_idx(L_dev, [lf_idx])
+        slice_mask_train = slice_mask_from_targeting_lfs_idx(Ls[0], [lf_idx])
+        slice_mask_dev = slice_mask_from_targeting_lfs_idx(Ls[1], [lf_idx])
         slice_name = f"slice_{lf_idx}_expert"
 
         print(f"{'-'*10}Training {slice_name}{'-'*10}")
         # initialize expert end model
-        #        input_module = input_module_class(**input_module_init_kwargs)
-        base_model = base_model_class(verbose=verbose, **base_model_init_kwargs)
+        expert = EndModel(**config["end_model_init_kwargs"])
 
-        # update labels to target slices
-        Y_expert_train = Y_train.copy()
+        # update train/dev labels to target slices
+        Y_expert_train = Ys[0].copy()
         Y_expert_train[slice_mask_train] = 1
         Y_expert_train[np.logical_not(slice_mask_train)] = 2
 
-        Y_expert_dev = Y_dev.copy()
+        Y_expert_dev = Ys[1].copy()
         Y_expert_dev[slice_mask_dev] = 1
         Y_expert_dev[np.logical_not(slice_mask_dev)] = 2
 
         # create slice-specific data loaders
-        if dataset_class:
-            train = dataset_class(X_train, Y_train, slice_mask=slice_mask_train)
-            dev = dataset_class(
-                X_dev, Y_dev, slice_mask=slice_mask_dev, training=False
-            )
-        else:
-            train = (X_train, Y_train)
-            dev = (X_dev, Y_dev)
+        Ys_experts = (Y_expert_train, Y_expert_dev)
+        train_loader = create_data_loader(
+            Ls, Xs, Ys_experts, Zs, config, "train"
+        )
+        dev_loader = create_data_loader(Ls, Xs, Ys_experts, Zs, config, "dev")
 
         # train expert
-        base_model.train_model(
-            train,
-            dev_data=dev,
-            n_epochs=10,
+        expert_kwargs = config.get("expert_train_kwargs", {})
+        expert.train_model(
+            train_loader,
+            dev_data=dev_loader,
             disable_prog_bar=True,
-            verbose=verbose,
+            **expert_kwargs,
         )
-        score = base_model.score(dev, verbose=verbose)
+        score = expert.score(dev_loader)
         print(f"Dev Score on L{lf_idx} examples:", score)
-        trained_models[slice_name] = base_model
+        trained_experts[slice_name] = expert
 
-    # train mixture of experts model
-    moe = MoEModel(trained_models, d=X_train.shape[1])
-    if dataset_class:
-        train = dataset_class(X_train, Y_train)
-        dev = dataset_class(X_dev, Y_dev, training=False)
-    else:
-        train = (X_train, Y_train)
-        dev = (X_dev, Y_dev)
+    # now, train mixture of experts model on FULL data
+    gating_dim = config.get("gating_dim", None)
+    MoE = MoEModel(trained_experts, d=Xs[0].shape[1], gating_dim=gating_dim)
+    train_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "train")
+    dev_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "dev")
 
-    moe.train_model(train, dev_data=dev, **train_kwargs)
-    return moe
+    train_kwargs = config.get("train_kwargs", {})
+    MoE.train_model(train_loader, dev_data=dev_loader, **train_kwargs)
+    return MoE
 
 
 class MoEModel(Classifier):

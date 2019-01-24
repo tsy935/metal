@@ -5,7 +5,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from metal.contrib.slicing.online_dp import SliceHatModel
-from metal.contrib.slicing.utils import generate_weak_labels
+from metal.contrib.slicing.utils import (
+    generate_weak_labels,
+    get_L_weights_from_targeting_lfs_idx,
+)
 from metal.end_model import EndModel
 from metal.tuners.tuner import ModelTuner
 from metal.utils import SlicingDataset
@@ -51,18 +54,9 @@ def create_data_loader(Ls, Xs, Ys, Zs, model_config, split, L_weights=None):
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
-def train_model(config, Ls, Xs, Ys, Zs, m):
+def train_model(config, Ls, Xs, Ys, Zs, L_weights=None):
     """
     Generates weak labels and trains a single model
-
-    Args:
-        config: model config with "end_model_init_kwargs"
-            optional: "train_kwargs", "slice_kwargs" (if slice model)
-        train_loader: data loader for train data
-            if slice: (X, L, Y)
-            else: (X, Y)
-        dev_loader: dataloader for validation data (X, Y)
-        m: num labeling sources
 
     Returns:
         model: a trained model
@@ -74,10 +68,13 @@ def train_model(config, Ls, Xs, Ys, Zs, m):
     # Add slice hat if applicable
     slice_kwargs = config.get("slice_kwargs")
     if slice_kwargs:
+        m = Ls[0].shape[1]  # number of LFs
         model = SliceHatModel(model, m, **slice_kwargs)
 
     # Create data loaders
-    train_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "train")
+    train_loader = create_data_loader(
+        Ls, Xs, Ys, Zs, config, "train", L_weights=L_weights
+    )
     dev_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "dev")
 
     # train model
@@ -157,12 +154,13 @@ def separate_eval_loader(data_loader):
     return X, Y, Z
 
 
-def search_upweighting_models(config, Ls, Xs, Ys, Zs, m, targeting_lfs_idx):
+def search_upweighting_models(config, Ls, Xs, Ys, Zs, targeting_lfs_idx):
 
     # init model
     model = EndModel(**config["end_model_init_kwargs"])
     search_space = config["upweight_search_space"]
     max_search = config.get("max_search")
+    m = Ls[0].shape[1]  # number of LFs
 
     # initialize datasets
     dev_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "dev")
@@ -174,9 +172,9 @@ def search_upweighting_models(config, Ls, Xs, Ys, Zs, m, targeting_lfs_idx):
         {"multiplier": search_space}, max_search
     ):
         # upweight label matrix at LFs targeting the slice
-        L_weights = np.ones(m)
-        L_weights[targeting_lfs_idx] = search_config["multiplier"]
-        L_weights = list(L_weights)
+        L_weights = get_L_weights_from_targeting_lfs_idx(
+            m, targeting_lfs_idx, search_config["multiplier"]
+        )
 
         train_loader = create_data_loader(
             Ls, Xs, Ys, Zs, config, "train", L_weights
