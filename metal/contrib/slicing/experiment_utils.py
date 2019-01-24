@@ -1,84 +1,85 @@
+import torch
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+from scipy.sparse import csr_matrix
+
+from metal.contrib.slicing.utils import generate_weak_labels
+from metal.end_model import EndModel
+from metal.contrib.slicing.online_dp import SliceHatModel
 from metal.utils import SlicingDataset
 
-
-def train_models(
-    config,
-    Ls,
-    Xs,
-    Ys,
-    Zs,
-    verbose=False):
+def create_data_loaders(Ls, Xs, Ys, Zs, model_config):
     """
-    Generates weak labels and trains a single model
+    Creates train, dev, and test dataloaders based on raw input data and config.
+
     Returns:
-        model: a trained model
+        (train_dl, dev_dl, test_dl)
     """
-    assert(isinstance(config["L_weights"], list) or config["L_weights"] is None)
+    
+    L_weights = model_config.get("L_weights")
+    assert(isinstance(L_weights, list) or L_weights is None)
 
+    is_slicing = "slice_kwargs" in model_config.keys()
+    
     # Generate weak labels:
     # a) uniform (L_weights = [1,...,1])
     # b) manual  (L_weights = [1,X,...1])
     # c) learned (L_weights = None): DP
-    Y_weak = generate_weak_labels(Ls[0], config["L_weights"])
+    L_train = Ls[0].toarray() if isinstance(Ls[0], csr_matrix) else Ls[0]
+    Y_weak = generate_weak_labels(L_train, L_weights)
+
+    if is_slicing:
+        train_dataset = SlicingDataset(Xs[0], L_train, Y_weak)
+    else:
+        train_dataset = SlicingDataset(Xs[0], Y_weak)
+
+    dev_dataset = SlicingDataset(Xs[1], Ys[1])
+    test_dataset = SlicingDataset(Xs[2], Ys[2], Zs[2])
+
+    batch_size = model_config.get("train_kwargs", {}).get("batch_size", 32)
+    return (
+        DataLoader(train_dataset, batch_size=batch_size, shuffle=True), 
+        DataLoader(dev_dataset, batch_size=batch_size, shuffle=False), 
+        DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    )
+
+
+def train_model(
+    config,
+    train_loader,
+    dev_loader,
+    m,
+    verbose=False):
+    """
+    Generates weak labels and trains a single model
+
+    Args:
+        config: model config with "end_model_init_kwargs"
+            optional: "train_kwargs", "slice_kwargs" (if slice model)
+        train_loader: data loader for train data 
+            if slice: (X, L, Y) 
+            else: (X, Y)
+        dev_loader: dataloader for validation data (X, Y)
+        m: num labeling sources
+
+    Returns:
+        model: a trained model
+    """
 
     # Instantiate end model
-    model = EndModel(layer_output)
+    model = EndModel(**config["end_model_init_kwargs"])
 
     # Add slice hat if applicable
     slice_kwargs = config.get('slice_kwargs')
     if slice_kwargs:
         model = SliceHatModel(model, m, **slice_kwargs)
 
+    # train model
+    train_kwargs = config.get("train_kwargs", {})
+    train_kwargs["disable_prog_bar"] = True
+    model.train_model(train_loader, dev_data=dev_loader, **train_kwargs)
 
-    base_model_class = config["base_model_class"]
-    base_model_init_kwargs = config["base_model_init_kwargs"]
-    train_kwargs = config["train_kwargs"]
-
-    model = base_model_class(
-#            input_module=input_module_class(**input_module_init_kwargs),
-        **base_model_init_kwargs,
-        verbose=verbose,
-        use_cuda=use_cuda,
-        seed=seed,
-    )
-    # Make dataloaders
-
-
-
-    train_dataset = (
-        SlicingDataset(Xs[0], Y_weak, Ls[0]) if config["train_on_L"]
-        else SyntheticDataset(Xs[0], Y_weak)
-    )
-
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=train_kwargs.get("batch_size", 32),
-        num_workers=1,
-        sampler=sampler
-    )
-
-
-
-
-#        input_module_class = config["input_module_class"]
-#        input_module_init_kwargs = config["input_module_init_kwargs"]
-
-    # init base model (i.e. EndModel or SliceDPModel)
-
-
-
-        # train model
-        model.train_model(
-            train_loader,
-            dev_data=(Xs[1], Ys[1]),
-            **train_kwargs,
-        )
-
-        # collect trained models in dict
-        trained_models[model_name] = model
-
-    return trained_models
+    return model
 
 
 def eval_model(
