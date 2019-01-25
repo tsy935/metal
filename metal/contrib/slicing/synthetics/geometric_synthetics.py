@@ -29,9 +29,12 @@ def generate_dataset(
     return_targeting_lfs=False,
     seed=None,
 ):
+    # Set random seed
     if seed:
         random.seed(seed)
         np.random.seed(seed)
+        torch.manual_seed(seed)
+
     # Create canvas
     canvas = Rectangle(0, 10, 0, 10)
     # Create points
@@ -229,7 +232,9 @@ def create_lfs(
     return L, regions_hist
 
 
-def create_slices(X, Y, lf_regions=None, num_slices=4, min_a=1, max_a=2):
+def create_slices(
+    X, Y, lf_regions=None, num_slices=4, min_slice_size=20, min_a=1, max_a=2
+):
     n, d = X.shape
     regions = []
     Z = np.zeros(n)
@@ -238,7 +243,10 @@ def create_slices(X, Y, lf_regions=None, num_slices=4, min_a=1, max_a=2):
     while not satisfied:
         if lf_regions is not None:
             centers = [
-                reg.center() for reg in np.random.choice(lf_regions, num_slices)
+                reg.center()
+                for reg in np.random.choice(
+                    lf_regions, num_slices, replace=False
+                )
             ]
         else:
             centers = X[np.random.choice(range(n), num_slices), :]
@@ -252,7 +260,9 @@ def create_slices(X, Y, lf_regions=None, num_slices=4, min_a=1, max_a=2):
             Z = assign_y(X, Z, region, i + 1)
 
         #  Make sure not slices were totally overwritten
-        satisfied = all(z > 20 for z in Counter(Z).values())
+        satisfied = (len(set(Z)) == num_slices + 1) and all(
+            z > min_slice_size for z in Counter(Z).values()
+        )
         if not satisfied:
             print("At least one slice was clobbered. Trying again.")
             Z = np.zeros(n)
