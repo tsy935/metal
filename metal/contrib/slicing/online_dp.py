@@ -217,6 +217,7 @@ class SliceHatModel(EndModel):
         self, base_model, m, slice_weight=0.1, reweight=True, **kwargs
     ):
         # NOTE: rather than using em_default_config, we use base_model.config
+        kwargs["slice_weight"] = slice_weight  # Add to kwargs so it merges
         config = recursive_merge_dicts(
             base_model.config, kwargs, misses="insert"
         )

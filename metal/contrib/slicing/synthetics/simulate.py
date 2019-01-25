@@ -75,7 +75,7 @@ data_config = {
     "head_config": {
         "h": 5,  # horizontal shift of slice
         "k": -2.5,  # vertical shift of slice
-        "r": 1.,  # radius of slice
+        "r": 1.0,  # radius of slice
         "slice_label": -1,
     },
     "accs": np.array([0.95, 0.95, 0.95]),  # default accuracy of LFs
@@ -138,7 +138,7 @@ model_configs = {
             "reweight": False,
             "r": 10,
             "slice_weight": 0.5,
-            "L_weights": np.array([1., 1., 1.]).astype(np.float32),
+            "L_weights": np.array([1.0, 1.0, 1.0]).astype(np.float32),
         },
         "input_module_class": MLPModule,
         "input_module_init_kwargs": {
@@ -155,7 +155,7 @@ model_configs = {
             "reweight": False,
             "r": 10,
             "slice_weight": 0.5,
-            "L_weights": np.array([1., 1., 5.]).astype(
+            "L_weights": np.array([1.0, 1.0, 5.0]).astype(
                 np.float32
             ),  # LF2 w/ 5x weight
         },
