@@ -154,7 +154,6 @@ class ModelTuner(object):
             *train_args,
             **train_kwargs,
             dev_data=dev_data,
-            verbose=verbose,
             log_writer=log_writer,
         )
 
