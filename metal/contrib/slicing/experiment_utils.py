@@ -1,14 +1,12 @@
+from collections import defaultdict
+
 import numpy as np
+import pandas as pd
 import torch
-from scipy.sparse import csr_matrix
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from metal.contrib.slicing.online_dp import SliceHatModel
-from metal.contrib.slicing.utils import (
-    generate_weak_labels,
-    get_L_weights_from_targeting_lfs_idx,
-)
+from metal.contrib.slicing.utils import get_L_weights_from_targeting_lfs_idx
 from metal.end_model import EndModel
 from metal.tuners.tuner import ModelTuner
 from metal.utils import SlicingDataset
@@ -191,3 +189,31 @@ def search_upweighting_models(
             best_model = model
 
     return best_model
+
+
+def parse_history(history, num_slices):
+    REPORTING_GROUPS = ["all"] + [
+        f"slice_{s}" for s in range(1, num_slices + 1)
+    ]
+    METRIC_NAME = "accuracy"
+
+    model_scores_by_slice = defaultdict(dict)
+    for model_name, model_scores in history.items():
+        for slice_name in REPORTING_GROUPS:
+            slice_scores = [
+                run[slice_name][METRIC_NAME] for run in model_scores
+            ]
+            mean_slice_score = sum(slice_scores) / len(slice_scores)
+            model_scores_by_slice[model_name][slice_name] = mean_slice_score
+
+    # Calculate average slice score
+    for model, scores in model_scores_by_slice.items():
+        slice_scores = [
+            score
+            for slice, score in scores.items()
+            if slice.startswith("slice")
+        ]
+        model_scores_by_slice[model]["slice_avg"] = np.mean(slice_scores)
+
+    df = pd.DataFrame.from_dict(model_scores_by_slice)
+    return df
