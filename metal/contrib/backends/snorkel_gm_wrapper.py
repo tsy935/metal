@@ -13,16 +13,16 @@ class SnorkelLabelModel(LabelModel):
         self.model = GenerativeModel()
 
     def train_model(self, L, **kwargs):
-        L = L.copy()
         if not issparse(L):
             L = csr_matrix(L)
+        L = L.copy()
         L[L == 2] = -1
         self.model.train(L, cardinality=self.k, verbose=False, **kwargs)
 
     def predict_proba(self, L):
-        L = L.copy()
         if not issparse(L):
             L = csr_matrix(L)
+        L = L.copy()
         L[L == 2] = -1
         marginals = self.model.marginals(L).reshape(-1, 1)
         Y_ps = np.hstack((marginals, 1 - marginals))
