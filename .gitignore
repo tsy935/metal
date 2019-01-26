@@ -25,3 +25,4 @@ events.out*
 # Local data and notebooks
 data/*
 notebooks/local/*
+checkpoints/
