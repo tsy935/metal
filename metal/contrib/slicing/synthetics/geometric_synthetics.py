@@ -24,6 +24,7 @@ def generate_dataset(
     X_kwargs={"random": False},
     Y_kwargs={"num_clusters": 4, "min_a": 1, "max_a": 3},
     Z_kwargs={"num_slices": 4, "min_a": 1, "max_a": 2},
+    unipolar=False,
     point_size=1.0,
     plotting=True,
     return_targeting_lfs=False,
@@ -42,7 +43,7 @@ def generate_dataset(
     # Create labels
     Y, label_regions = create_labels(X, k, **Y_kwargs)
     # Create lfs
-    L, lf_regions = create_lfs(X, Y, m, **L_kwargs)
+    L, lf_regions = create_lfs(X, Y, m, unipolar, **L_kwargs)
     # Create slices
     Z, slice_regions = create_slices(X, Y, lf_regions, **Z_kwargs)
     if plotting:
@@ -195,6 +196,7 @@ def create_lfs(
     X,
     Y,
     m,
+    unipolar=False,
     min_r=1,
     max_r=5,
     min_acc=0.5,
@@ -216,6 +218,10 @@ def create_lfs(
         props = np.random.uniform(min_acc, max_acc, d)
         accs = np.random.uniform(min_acc, max_acc, d)
         l = assign_l(X, Y, region, props, accs)
+        if unipolar:
+            k = 2  # Data generator currently only works with 2 classes
+            polarity = np.random.randint(1, k + 1)
+            l[l != polarity] = 0
         L.append(l)
 
         # bookkeeping

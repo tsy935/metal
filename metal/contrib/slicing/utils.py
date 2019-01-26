@@ -1,3 +1,5 @@
+from collections import Counter
+
 import numpy as np
 import torch
 from scipy.sparse import csr_matrix
@@ -7,6 +9,33 @@ from torch.utils.data.sampler import WeightedRandomSampler
 from tqdm import tqdm
 
 from metal.metrics import accuracy_score, metric_score
+
+
+def add_pepper(L, pepper_pct, verbose=True):
+    """Randomly flips a given percent of abstain votes on all unipolar LFs"""
+
+    def flip(x):
+        return 1 if x == 2 else 1
+
+    k = 2
+    n, m = L.shape
+
+    peppered = 0
+    for j in range(m):
+        label_vec = np.asarray(L[:, j].todense())
+        label_counts = Counter(int(label) for label in label_vec)
+        if len(label_counts) < k + 1:
+            peppered += 1
+            polarity = max(label_counts.keys())
+            idxs, vals = np.where(label_vec != polarity)
+            pepper_count = int(pepper_pct * label_counts[polarity])
+            selected = np.random.choice(idxs, pepper_count)
+            L[selected, j] = flip(polarity)
+    if verbose:
+        print(
+            f"Added pepper={pepper_pct} random negatives on {peppered}/{m} LFs"
+        )
+    return L
 
 
 def get_L_weights_from_targeting_lfs_idx(m, targeting_lfs_idx, multiplier):
@@ -87,7 +116,7 @@ def generate_weak_labels(L_train, weights=None, verbose=False, seed=0):
         if verbose:
             print("Training Snorkel label model...")
         from metal.contrib.backends.snorkel_gm_wrapper import (
-            SnorkelLabelModel as LabelModel,
+            SnorkelLabelModel as LabelModel
         )
 
         label_model = LabelModel()
