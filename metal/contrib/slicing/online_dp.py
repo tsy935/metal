@@ -218,6 +218,8 @@ class SliceHatModel(EndModel):
     ):
         # NOTE: rather than using em_default_config, we use base_model.config
         kwargs["slice_weight"] = slice_weight  # Add to kwargs so it merges
+        # base_model has a seed, but use SliceHatModel's seed instead
+        kwargs["seed"] = kwargs.get("seed", None)
         config = recursive_merge_dicts(
             base_model.config, kwargs, misses="insert"
         )
