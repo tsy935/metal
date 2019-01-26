@@ -32,7 +32,7 @@ em_default_config = {
     # TRAINING
     "train_config": {
         # Loss function config
-        "loss_fn_reduction": "elementwise_mean",
+        "loss_fn_reduction": "mean",
         # Display
         "print_every": 1,  # Print after this many epochs
         "disable_prog_bar": False,  # Disable progress bar each epoch

@@ -266,7 +266,7 @@ class SliceHatModel(EndModel):
                 self.Y_head_off = nn.Linear(2 * neck_dim, 1)
             else:
                 self.Y_head_off = nn.Linear(neck_dim, 1)
-            self.Y_criteria = nn.BCEWithLogitsLoss(reduction="elementwise_mean")
+            self.Y_criteria = nn.BCEWithLogitsLoss(reduction="mean")
 
     def _get_loss_fn(self):
         return self._loss
