@@ -229,14 +229,14 @@ class SliceHatModel(EndModel):
             self.L_criteria = nn.BCEWithLogitsLoss(reduction="none")
 
         if self.has_Y_head:
-            if self.reweight:
-                if not self.has_L_head:
-                    msg = "Cannot reweight neck if no L_head is present."
-                    raise Exception(msg)
-                # If reweighting, Y_head sees original rep and reweighted one
-                self.Y_head_off = nn.Linear(2 * neck_dim, 2)
-            else:
-                self.Y_head_off = nn.Linear(neck_dim, 2)
+            # if self.reweight:
+            #     if not self.has_L_head:
+            #         msg = "Cannot reweight neck if no L_head is present."
+            #         raise Exception(msg)
+            #     # If reweighting, Y_head sees original rep and reweighted one
+            #     self.Y_head_off = nn.Linear(2 * neck_dim, 2)
+            # else:
+            self.Y_head_off = nn.Linear(neck_dim, 2)
             self.Y_criteria = SoftCrossEntropyLoss(reduction="mean")
 
     def _get_loss_fn(self):
@@ -303,7 +303,8 @@ class SliceHatModel(EndModel):
             # and use this to create a reweighted representation S
             S = (A @ W) * R
             # Concatentate these into a single input for the Y_head
-            neck = torch.cat((R, S), 1)
+            # neck = torch.cat((R, S), 1)
+            neck = R + S
         return self.Y_head_off(neck)
 
     @torch.no_grad()
