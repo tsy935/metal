@@ -6,37 +6,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from metal.classifier import Classifier
-from metal.end_model.em_defaults import em_default_config
 from metal.end_model.end_model import EndModel
 from metal.end_model.loss import SoftCrossEntropyLoss
 from metal.utils import recursive_merge_dicts
-
-
-class LinearModule(nn.Module):
-    def __init__(self, input_dim, output_dim, bias=False):
-        super().__init__()
-        self.input_layer = nn.Linear(input_dim, output_dim, bias=bias)
-
-    def forward(self, x):
-        return self.input_layer(x)
-
-
-class MLPModule(nn.Module):
-    def __init__(self, input_dim, output_dim, middle_dims=[], bias=True):
-        super().__init__()
-
-        # Create layers
-        dims = [input_dim] + middle_dims + [output_dim]
-        layers = []
-        for i in range(len(dims) - 1):
-            layers.append(nn.Linear(dims[i], dims[i + 1], bias=bias))
-            if i + 1 < len(dims):
-                layers.append(nn.ReLU())
-
-        self.input_layer = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.input_layer(x)
 
 
 class SliceDPModel(EndModel):
@@ -257,16 +229,15 @@ class SliceHatModel(EndModel):
             self.L_criteria = nn.BCEWithLogitsLoss(reduction="none")
 
         if self.has_Y_head:
-            # WARNING: breaking MeTaL convention and using 1-dim output when k=2
             if self.reweight:
                 if not self.has_L_head:
                     msg = "Cannot reweight neck if no L_head is present."
                     raise Exception(msg)
                 # If reweighting, Y_head sees original rep and reweighted one
-                self.Y_head_off = nn.Linear(2 * neck_dim, 1)
+                self.Y_head_off = nn.Linear(2 * neck_dim, 2)
             else:
-                self.Y_head_off = nn.Linear(neck_dim, 1)
-            self.Y_criteria = nn.BCEWithLogitsLoss(reduction="mean")
+                self.Y_head_off = nn.Linear(neck_dim, 2)
+            self.Y_criteria = SoftCrossEntropyLoss(reduction="mean")
 
     def _get_loss_fn(self):
         return self._loss
@@ -303,7 +274,7 @@ class SliceHatModel(EndModel):
 
         if self.has_Y_head:
             Y_logits = self.forward_Y_off(X, L_logits)
-            Y_loss = self.Y_criteria(Y_logits.squeeze(), Y_s[:, 0].float())
+            Y_loss = self.Y_criteria(Y_logits.squeeze(), Y_s.float())
         else:
             Y_loss = 0
 
@@ -342,8 +313,7 @@ class SliceHatModel(EndModel):
 
     @torch.no_grad()
     def predict_proba(self, X):
-        preds = torch.sigmoid(self.forward_Y_off(X)).data.cpu().numpy()
-        return np.hstack((preds, 1 - preds))
+        return torch.sigmoid(self.forward_Y_off(X)).data.cpu().numpy()
 
 
 class SliceOnlineModel(EndModel):
@@ -501,6 +471,33 @@ class SliceOnlineModel(EndModel):
             torch.sigmoid(self.forward_Y_on(neck, L_logits)).data.cpu().numpy()
         )
         return np.hstack((preds, 1 - preds))
+
+
+class LinearModule(nn.Module):
+    def __init__(self, input_dim, output_dim, bias=False):
+        super().__init__()
+        self.input_layer = nn.Linear(input_dim, output_dim, bias=bias)
+
+    def forward(self, x):
+        return self.input_layer(x)
+
+
+class MLPModule(nn.Module):
+    def __init__(self, input_dim, output_dim, middle_dims=[], bias=True):
+        super().__init__()
+
+        # Create layers
+        dims = [input_dim] + middle_dims + [output_dim]
+        layers = []
+        for i in range(len(dims) - 1):
+            layers.append(nn.Linear(dims[i], dims[i + 1], bias=bias))
+            if i + 1 < len(dims):
+                layers.append(nn.ReLU())
+
+        self.input_layer = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.input_layer(x)
 
 
 def reset_parameters(m):
