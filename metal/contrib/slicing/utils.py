@@ -19,6 +19,7 @@ def add_pepper(L, pepper_pct, verbose=True):
 
     k = 2
     n, m = L.shape
+    L = L.copy()
 
     peppered = 0
     for j in range(m):
