@@ -205,7 +205,7 @@ class SliceHatModel(EndModel):
     """A model which makes a base single-task EndModel slice-aware
 
     Args:
-        model: an instantiated EndModel (it will be copied and reinitialized)
+        base_model: an instantiated EndModel (it will be copied and reinitialized)
         m: the number of labeling functions
         slice_weight: a float in [0,1]; how much the L_loss matters
             0: there is no L head (it is a vanilla EndModel)
@@ -288,7 +288,7 @@ class SliceHatModel(EndModel):
         neck = self.body(X)
 
         if self.has_L_head:
-            L_logits = self.L_head(neck)
+            L_logits = self.forward_L(neck)
             # Weight loss by lf weights if applicable and mask abstains
             L_loss_masked = (
                 self.L_criteria(L_logits, L.float())
@@ -298,10 +298,11 @@ class SliceHatModel(EndModel):
             # Get average L loss by example per lf
             L_loss = torch.mean(L_loss_masked, dim=0) / self.m
         else:
+            L_logits = None
             L_loss = 0
 
         if self.has_Y_head:
-            Y_logits = self.forward_Y_off(X)
+            Y_logits = self.forward_Y_off(X, L_logits)
             Y_loss = self.Y_criteria(Y_logits.squeeze(), Y_s[:, 0].float())
         else:
             Y_loss = 0
@@ -309,11 +310,14 @@ class SliceHatModel(EndModel):
         loss = (self.slice_weight * L_loss) + ((1 - self.slice_weight) * Y_loss)
         return loss
 
+    def forward_L(self, neck):
+        return self.L_head(neck)
+
     def forward_Y_off(self, X, L_logits=None):
         """Returns the logits of the offline Y_head"""
         neck = self.body(X)
         if self.reweight:
-            if not L_logits:
+            if L_logits is None:
                 L_logits = self.L_head(neck)
             # A is the [batch_size, m] Tensor representing the amount of
             # attention to pay to each head (based on each ones' confidence)
@@ -339,6 +343,163 @@ class SliceHatModel(EndModel):
     @torch.no_grad()
     def predict_proba(self, X):
         preds = torch.sigmoid(self.forward_Y_off(X)).data.cpu().numpy()
+        return np.hstack((preds, 1 - preds))
+
+
+class SliceOnlineModel(EndModel):
+    """A model which makes an offline EndModel an online slice-aware one
+
+    Args:
+        base_model: an instantiated EndModel (it will be copied and reinitialized)
+        m: the number of labeling functions
+        slice_weight: a float in [0,1]; how much the L_loss matters
+            0: there is no L head (it is a vanilla EndModel)
+            1: there is no Y head (it learns only to predict Ys)
+        reweight: (bool) if True, use attention to reweight the neck
+    """
+
+    def __init__(
+        self, base_model, m, L_head_weight=0.1, Y_head_weight=0.1, **kwargs
+    ):
+        # NOTE: rather than using em_default_config, we use base_model.config
+        # Add head weights to kwargs so they merge
+        kwargs["L_head_weight"] = L_head_weight
+        kwargs["Y_head_weight"] = Y_head_weight
+        # base_model has a seed, but use SliceHatModel's seed instead
+        kwargs["seed"] = kwargs.get("seed", None)
+        config = recursive_merge_dicts(
+            base_model.config, kwargs, misses="insert"
+        )
+        k = base_model.network[-1].out_features
+        if k != 2:
+            raise Exception("SliceHatModel is currently only valid for k=2.")
+
+        # Leap frog EndModel initialization (`model` is already initialized)
+        Classifier.__init__(self, k=k, config=config)
+
+        self.m = m
+        self.L_head_weight = L_head_weight
+        self.Y_head_weight = Y_head_weight
+        self.build_model(base_model)
+
+        # Show network
+        if self.config["verbose"]:
+            print(self)
+            print()
+
+    def build_model(self, base_model):
+        Y_head_off = base_model.network[-1]
+        neck_dim = Y_head_off.in_features
+        self.body = copy.deepcopy(base_model.network[:-1])
+        if self.config["verbose"]:
+            print("Resetting base model parameters")
+        self.body.apply(reset_parameters)
+
+        # No bias on L-head; we only want the weights
+        self.L_head = nn.Linear(neck_dim, self.m, bias=False)
+        self.L_criteria = nn.BCEWithLogitsLoss(reduction="none")
+
+        # WARNING: breaking MeTaL convention and using 1-dim output when k=2
+        self.Y_head_off = nn.Linear(neck_dim, 1)
+        self.Y_criteria = nn.BCEWithLogitsLoss(reduction="mean")
+
+        self.Y_head_on = nn.Linear(neck_dim * 2, 1)
+
+    def _get_loss_fn(self):
+        return self._loss
+
+    def _loss(self, X, L, Y_s):
+        """Returns the average loss per example"""
+        # TODO: Do not change L types every time the loss function is called!
+        # For efficiency, L would be converted to {-1,0,1} before being passed
+        # into the model; for consistency in the code, we leave L in {0,1,2}
+        # wherever the user deals with it.
+
+        abstains = L == 0
+        # To turn off masking:
+        # abstains = torch.ones_like(L).byte()
+
+        L = L.clone()
+        L[L == 0] = 0.5  # Abstains are ambivalent (0 logit)
+        L[L == 2] = 0  # 2s are negative class
+
+        neck = self.body(X)
+
+        # Execute L head
+        L_logits = self.forward_L(neck)
+        # Weight loss by lf weights if applicable and mask abstains
+        L_loss_masked = (
+            self.L_criteria(L_logits, L.float())
+            .masked_fill(abstains, 0)
+            .sum(dim=1)
+        )
+        # Get average L loss by example per lf
+        L_loss = torch.mean(L_loss_masked, dim=0) / self.m
+
+        # Execute Y offline head
+        Y_off_logits = self.forward_Y_off(neck)
+        Y_off_loss = self.Y_criteria(Y_off_logits.squeeze(), Y_s[:, 0].float())
+
+        # Execute Y online head
+        Y_on_logits = self.forward_Y_on(neck, L_logits)
+        Y_on_loss = self.Y_criteria(Y_on_logits.squeeze(), Y_s[:, 0].float())
+
+        # Combine losses
+        loss = (
+            (self.L_head_weight * L_loss)
+            + (self.Y_head_weight * Y_off_loss)
+            + ((1 - self.L_head_weight - self.Y_head_weight) * Y_on_loss)
+        )
+        return loss
+
+    def forward_L(self, neck):
+        """Returns the logits of the L_head"""
+        return self.L_head(neck)
+
+    def forward_Y_off(self, neck):
+        """Returns the logits of the offline Y_head"""
+        return self.Y_head_off(neck)
+
+    def forward_Y_on(self, neck, L_logits):
+        """Returns the logits of the online Y_head"""
+        L_logits = self.forward_L(neck)
+        # A is the [batch_size, m] Tensor representing the amount of
+        # attention to pay to each head (based on each ones' confidence)
+        A = F.softmax(abs(L_logits), dim=1)
+        # W is the [r, m] linear mapping that transforms the neck into
+        # logits for the L heads
+        W = self.L_head.weight
+        # R is the [r, 1] neck (representation vector) that would
+        # normally go into the Y head
+        R = neck
+        # We reweight the linear mappings W by the attention scores A
+        # and use this to create a reweighted representation S
+        S = (A @ W) * R
+        # Concatentate this with the output of Y_head_off
+        double_neck = torch.cat((R, S), 1)
+        return self.Y_head_on(double_neck)
+        # neck = R + S
+        # return self.Y_head_on(F.relu(torch.cat((neck, -neck), -1)))
+
+    @torch.no_grad()
+    def predict_L_proba(self, X):
+        """A convenience function that predicts L probabilities"""
+        return torch.sigmoid(self.L_head(self.body(X)))
+
+    @torch.no_grad()
+    def predict_Y_proba(self, X):
+        """A convenience function that predicts Y offline probabilities"""
+        neck = self.body(X)
+        preds = torch.sigmoid(self.forward_Y_off(neck)).data.cpu().numpy()
+        return np.hstack((preds, 1 - preds))
+
+    @torch.no_grad()
+    def predict_proba(self, X):
+        neck = self.body(X)
+        L_logits = self.forward_L(neck)
+        preds = (
+            torch.sigmoid(self.forward_Y_on(neck, L_logits)).data.cpu().numpy()
+        )
         return np.hstack((preds, 1 - preds))
 
 
