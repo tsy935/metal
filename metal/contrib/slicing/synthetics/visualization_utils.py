@@ -1,8 +1,8 @@
 import os
-
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.sparse import csr_matrix
 from IPython.display import display
 
 
@@ -57,11 +57,14 @@ def visualize_data(X, Y, C, L):
     #    plt.subplot(2, 2, 3)
     plt.figure(figsize=(4, 4))
     plt.title("LFs ($\lambda_i$) Targeting Slices ($S_i$)")
+    if isinstance(L, csr_matrix):
+        L = L.toarray()
     for c in np.unique(C):
         c = int(c)
+        voted_idx = np.where(L[:, c] != 0)[0]
         plt.scatter(
-            X[L[:, c] != 0, 0],
-            X[L[:, c] != 0, 1],
+            X[voted_idx, 0],
+            X[voted_idx, 1],
             label=f"$\lambda_{c}$",
             s=0.2,
         )
