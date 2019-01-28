@@ -3,7 +3,6 @@ from collections import Counter
 import numpy as np
 import torch
 from scipy.sparse import csr_matrix
-from scipy.special import expit
 from termcolor import colored
 from torch.utils.data.sampler import WeightedRandomSampler
 from tqdm import tqdm
@@ -92,39 +91,8 @@ def compute_lf_accuracies(L_dev, Y_dev):
 
 def generate_weak_labels(L_train, weights=None, verbose=False, seed=0):
     """ Combines L_train into weak labels either using accuracies of LFs or LabelModel."""
-    L_train_np = L_train.copy()
+    raise Exception("Use the classes `metal.label_model.baselines`!")
 
-    if weights is not None:
-        if verbose:
-            print("Using weights to combine L_train:", weights)
-
-        weights = np.array(weights)
-        if np.any(weights >= 1):
-            weights = weights / np.max(
-                weights + 1e-5
-            )  # add epsilon to avoid 1.0 weight
-
-        # Combine with weights computed from LF accuracies
-        w = np.log(weights / (1 - weights))
-        w[np.abs(w) == np.inf] = 0  # set weights from acc==0 to 0
-
-        # L_train_pt = torch.from_numpy(L_train.astype(np.float32))
-        # TODO: add multiclass support
-        L_train_np[L_train_np == 2] = -1
-        label_probs = expit(2 * L_train_np @ w).reshape(-1, 1)
-        Y_weak = np.concatenate((label_probs, 1 - label_probs), axis=1)
-    else:
-        if verbose:
-            print("Training Snorkel label model...")
-        from metal.contrib.backends.snorkel_gm_wrapper import (
-            SnorkelLabelModel as LabelModel
-        )
-
-        label_model = LabelModel()
-        label_model.train_model(L_train_np.astype(np.int8))
-        Y_weak = label_model.predict_proba(L_train)
-
-    return Y_weak
 
 
 def compare_LF_slices(

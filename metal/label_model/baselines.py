@@ -1,6 +1,9 @@
 import numpy as np
+from scipy.special import expit
 
 from metal.label_model.label_model import LabelModel
+from metal.utils import recursive_merge_dicts
+from metal.label_model.lm_defaults import lm_default_config
 
 
 class RandomVoter(LabelModel):
@@ -73,3 +76,36 @@ class MajorityLabelVoter(RandomVoter):
             Y_p[i, :] = np.where(counts == max(counts), 1, 0)
         Y_p /= Y_p.sum(axis=1).reshape(-1, 1)
         return Y_p
+
+
+class WeightedLabelVoter(LabelModel):
+    """
+    Combines label matrix using pre-defined weights.
+    """
+    def __init__(self, weights, **kwargs):
+        self.weights = np.array(weights)
+        config = recursive_merge_dicts(lm_default_config, kwargs)
+        super().__init__(k=2, config=config)
+
+    def train_model(self, *args, **kwargs):
+        pass
+
+    def predict_proba(self, L):
+        print (f"Warning: {self.__class__.__name__} only accepts k=2 class L_matrix.")
+        L_np = L.copy()
+
+        weights = self.weights
+        if np.any(weights >= 1):
+            weights = weights / np.max(
+                weights + 1e-5
+            )  # add epsilon to avoid 1.0 weight
+
+        # Combine with weights computed from LF accuracies
+        w = np.log(weights / (1 - weights))
+        w[np.abs(w) == np.inf] = 0  # set weights from acc==0 to 0
+
+        # TODO: add multiclass support
+        L_np[L_np == 2] = -1
+        label_probs = expit(2 * L_np @ w).reshape(-1, 1)
+        Y_weak = np.concatenate((label_probs, 1 - label_probs), axis=1)
+        return Y_weak
