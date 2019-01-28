@@ -94,7 +94,6 @@ def generate_weak_labels(L_train, weights=None, verbose=False, seed=0):
     raise Exception("Use the classes `metal.label_model.baselines`!")
 
 
-
 def compare_LF_slices(
     Yp_ours, Yp_base, Y, L_test, LFs, metric="accuracy", delta_threshold=0
 ):

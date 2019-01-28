@@ -2,8 +2,8 @@ import numpy as np
 from scipy.special import expit
 
 from metal.label_model.label_model import LabelModel
-from metal.utils import recursive_merge_dicts
 from metal.label_model.lm_defaults import lm_default_config
+from metal.utils import recursive_merge_dicts
 
 
 class RandomVoter(LabelModel):
@@ -82,6 +82,7 @@ class WeightedLabelVoter(LabelModel):
     """
     Combines label matrix using pre-defined weights.
     """
+
     def __init__(self, weights, **kwargs):
         self.weights = np.array(weights)
         config = recursive_merge_dicts(lm_default_config, kwargs)
@@ -91,7 +92,9 @@ class WeightedLabelVoter(LabelModel):
         pass
 
     def predict_proba(self, L):
-        print (f"Warning: {self.__class__.__name__} only accepts k=2 class L_matrix.")
+        print(
+            f"Warning: {self.__class__.__name__} only accepts k=2 class L_matrix."
+        )
         L_np = L.copy()
 
         weights = self.weights

@@ -5,10 +5,10 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from metal.label_model.baselines import WeightedLabelVoter
 from metal.contrib.slicing.online_dp import SliceHatModel
 from metal.contrib.slicing.utils import get_L_weights_from_targeting_lfs_idx
 from metal.end_model import EndModel
+from metal.label_model.baselines import WeightedLabelVoter
 from metal.tuners.tuner import ModelTuner
 from metal.utils import SlicingDataset
 
@@ -63,9 +63,7 @@ def train_model(config, Ls, Xs, Ys, Zs, L_weights=None):
         model = SliceHatModel(model, m, **slice_kwargs)
 
     # Create data loaders
-    train_loader = create_data_loader(
-        Ls, Xs, Ys, Zs, config, "train"
-    )
+    train_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "train")
     dev_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "dev")
 
     # train model
@@ -170,13 +168,11 @@ def search_upweighting_models(
         L_weights = get_L_weights_from_targeting_lfs_idx(
             m, targeting_lfs_idx, search_config["multiplier"]
         )
-        
+
         Y_weak = WeightedLabelVoter(L_weights).predict_proba(Ls[0])
         Ys[0] = Y_weak
 
-        train_loader = create_data_loader(
-            Ls, Xs, Ys, Zs, config, "train"
-        )
+        train_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "train")
 
         train_kwargs = config.get("train_kwargs", {})
         train_kwargs["disable_prog_bar"] = True
