@@ -6,7 +6,9 @@ import torch
 from torch.utils.data import DataLoader
 
 from metal.contrib.slicing.online_dp import (
-    SliceDPModel, SliceHatModel, SliceOnlineModel
+    SliceDPModel,
+    SliceHatModel,
+    SliceOnlineModel,
 )
 from metal.contrib.slicing.utils import get_L_weights_from_targeting_lfs_idx
 from metal.end_model import EndModel
@@ -62,7 +64,7 @@ def train_model(config, Ls, Xs, Ys, Zs, L_weights=None, model_key="hat"):
     slice_kwargs = config.get("slice_kwargs")
     if slice_kwargs:
         m = Ls[0].shape[1]  # number of LFs
-        
+
         if model_key == "hat":
             model = SliceHatModel(model, m, **slice_kwargs)
         elif model_key == "online":
@@ -81,41 +83,40 @@ def train_model(config, Ls, Xs, Ys, Zs, L_weights=None, model_key="hat"):
 
     return model
 
+
 def train_slice_dp(config, Ls, Xs, Ys, Zs):
     """ Trains "original" SliceDPModel """
     Ls_tensors = [torch.Tensor(np.asarray(L.todense())) for L in Ls]
-    
+
     # convert to categorical labels, this usually happens with GT
     if len(Ys[0].shape) == 1:
         Y_train = Ys[0].copy()
         Y_train[Y_train == 2] = 0
         Y_train = np.expand_dims(Y_train, axis=1)
-        Y_train = np.concatenate((Y_train, 1 - Y_train), axis=1) 
+        Y_train = np.concatenate((Y_train, 1 - Y_train), axis=1)
         Y_train = torch.Tensor(Y_train)
         Ys[0] = Y_train
-        
+
     batch_size = config.get("train_kwargs", {}).get("batch_size", 32)
     train_loader = DataLoader(
         SlicingDataset(Xs[0], Ls_tensors[0], Ys[0]),
         batch_size=batch_size,
-        shuffle=True
+        shuffle=True,
     )
     dev_loader = DataLoader(
-        SlicingDataset(Xs[1], torch.Tensor(Ys[1])),
-        batch_size=batch_size,
+        SlicingDataset(Xs[1], torch.Tensor(Ys[1])), batch_size=batch_size
     )
-    
+
     n, m = Ls[0].shape
-    input_dim = Xs[0].shape[1]
-    input_module = config['input_module_class'](**config['input_module_init_kwargs'])
-    slice_orig = SliceDPModel(input_module, m=m, **config['slice_kwargs'])
-        
-    slice_orig.train_model(
-        train_loader,
-        dev_data=dev_loader,
-        **config["train_kwargs"]
+    input_module = config["input_module_class"](
+        **config["input_module_init_kwargs"]
     )
-    
+    slice_orig = SliceDPModel(input_module, m=m, **config["slice_kwargs"])
+
+    slice_orig.train_model(
+        train_loader, dev_data=dev_loader, **config["train_kwargs"]
+    )
+
     return slice_orig
 
 

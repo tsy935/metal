@@ -13,7 +13,7 @@ from metal.contrib.slicing.experiment_utils import (
 from metal.contrib.slicing.mixture_of_experts import train_MoE_model
 from metal.contrib.slicing.online_dp import MLPModule, SliceHatModel
 from metal.contrib.slicing.synthetics.geometric_synthetics import (
-    generate_dataset
+    generate_dataset,
 )
 from metal.contrib.slicing.utils import get_L_weights_from_targeting_lfs_idx
 from metal.end_model import EndModel

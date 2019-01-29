@@ -48,6 +48,7 @@ def generate_dataset(
     Z, slice_regions = create_slices(X, Y, lf_regions, **Z_kwargs)
     if plotting:
         plot_all(L, X, Y, Z)
+        plt.show()
 
     # Restore expected datatypes
     L = csr_matrix(L)
