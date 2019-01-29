@@ -1,9 +1,10 @@
 import os
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from scipy.sparse import csr_matrix
 from IPython.display import display
+from scipy.sparse import csr_matrix
 
 
 def display_scores(scores, x_var, x_range):
@@ -63,10 +64,7 @@ def visualize_data(X, Y, C, L):
         c = int(c)
         voted_idx = np.where(L[:, c] != 0)[0]
         plt.scatter(
-            X[voted_idx, 0],
-            X[voted_idx, 1],
-            label=f"$\lambda_{c}$",
-            s=0.2,
+            X[voted_idx, 0], X[voted_idx, 1], label=f"$\lambda_{c}$", s=0.2
         )
     plt.xlim(-4, 12)
     plt.ylim(-8, 8)
@@ -82,7 +80,7 @@ def visualize_data(X, Y, C, L):
     #    plt.xlim(-8, 8)
     #    plt.ylim(-8, 8)
     #    plt.legend()
-    plt.show()
+    # plt.show()
 
 
 def plot_base_attention_delta(scores, xlabel=None):
@@ -162,7 +160,7 @@ def plot_slice_scores(
 def plot_predictions(X_test, Y_test, model, C=None):
     Y_p, Y = model._get_predictions((X_test, Y_test))
 
-    correct_idx = np.where(Y_p == Y)[0]
+    # correct_idx = np.where(Y_p == Y)[0]
     wrong_idx = np.where(Y_p != Y)[0]
     if C is not None:
         for c in np.unique(C):

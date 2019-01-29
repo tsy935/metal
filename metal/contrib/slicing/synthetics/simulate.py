@@ -33,16 +33,16 @@ from visualization_utils import (
 )
 
 from metal.contrib.logging.tensorboard import TensorBoardWriter
-from metal.contrib.slicing.experiment_utils import (
-    compute_lf_accuracies,
-    generate_weak_labels,
-    get_weighted_sampler_via_targeting_lfs,
-)
-from metal.contrib.slicing.mixture_of_experts import trainMoE
+from metal.contrib.slicing.mixture_of_experts import train_MoE_model
 from metal.contrib.slicing.online_dp import (
     LinearModule,
     MLPModule,
     SliceDPModel,
+)
+from metal.contrib.slicing.utils import (
+    compute_lf_accuracies,
+    generate_weak_labels,
+    get_weighted_sampler_via_targeting_lfs,
 )
 from metal.end_model import EndModel
 
