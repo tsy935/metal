@@ -13,7 +13,7 @@ from metal.end_model.loss import SoftCrossEntropyLoss
 from metal.utils import hard_to_soft, recursive_merge_dicts
 
 
-def train_MoE_model(config, Ls, Xs, Ys, Zs, verbose=False):
+def train_MoE_model(config, Ls, Xs, Ys, Zs, verbose=True):
     """
     Treats each LF as an "expert", and trains a separate model for each LF.
     Then, freezes models and combines predictions with a separate gating network.
