@@ -118,7 +118,6 @@ class SliceDPModel(EndModel):
             - Y_weak: A [batch_size, k] torch Tensor labels with elements [0,1] for
                 each col k class
         """
-
         # L indicates whether LF is triggered; supports multiclass
         L[L != 0] = 1
 
@@ -162,15 +161,19 @@ class SliceDPModel(EndModel):
             # We then project the A weighting onto the respective features of
             # the L_head layer, and add these attention-weighted features to Xr
             W = self.L_head.weight.repeat(batchsize, 1, 1)
-            xr = torch.cat([xr, torch.bmm(A, W).squeeze()], 1)
+            xr = torch.cat([xr, torch.bmm(A, W).squeeze(1)], 1)
 
         # Return the list of head outputs + DP head
-        outputs = self.Y_head(xr).squeeze()
+        outputs = self.Y_head(xr)
         return outputs
 
+    @torch.no_grad()
+    def predict_L_proba(self, x):
+        return F.sigmoid(self.forward_L(x)).data.cpu().numpy()
+
+    @torch.no_grad()
     def predict_proba(self, x):
-        with torch.no_grad():
-            return F.softmax(self.forward_Y(x)).data.cpu().numpy()
+        return F.softmax(self.forward_Y(x)).data.cpu().numpy()
 
 
 class SliceHatModel(EndModel):
@@ -250,7 +253,7 @@ class SliceHatModel(EndModel):
 
         abstains = L == 0
         # To turn off masking:
-        # abstains = torch.ones_like(L).byte()
+        abstains = torch.ones_like(L).byte()
 
         L = L.clone()
         L[L == 0] = 0.5  # Abstains are ambivalent (0 logit)
@@ -310,11 +313,17 @@ class SliceHatModel(EndModel):
     @torch.no_grad()
     def predict_L_proba(self, X):
         """A convenience function that predicts L probabilities"""
-        return torch.sigmoid(self.L_head(self.body(X)))
+        return torch.sigmoid(self.L_head(self.body(X))).data.cpu().numpy()
 
     @torch.no_grad()
     def predict_proba(self, X):
-        return torch.sigmoid(self.forward_Y_off(X)).data.cpu().numpy()
+        if self.has_Y_head:
+            return torch.sigmoid(self.forward_Y_off(X)).data.cpu().numpy()
+        else:
+            # HACK: return nonsense (all zeros) if Y_head is not activated.
+            # Should fix this pattern-- slice_weight=1.0 prevents us from
+            # doing ablations on hard parameter sharing.
+            return np.expand_dims(np.zeros(X.shape[0]), axis=1)
 
 
 class SliceOnlineModel(EndModel):

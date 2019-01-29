@@ -191,8 +191,9 @@ def search_upweighting_models(
 
 
 def parse_history(history, num_slices):
+    # NOTE: VC changed this from `s+1` --> `s`, so it works w/ pacman synthetics
     REPORTING_GROUPS = ["all"] + [
-        f"slice_{s}" for s in range(1, num_slices + 1)
+        f"slice_{s}" for s in range(num_slices)
     ]
     METRIC_NAME = "accuracy"
 

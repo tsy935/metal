@@ -57,13 +57,13 @@ def generate_deathstar_data(
         class_props[1] = 1 - x_val
 
     elif x_var == "head_recall":
-        target_metric = "recall"
+        # target_metric = "recall"
         lf_metrics[0] = ("recall", x_val)
 
     # override head precision value
     #     head_precision_override = None
     if x_var == "head_precision":
-        target_metric = "precision"
+        # target_metric = "precision"
         #         head_precision_override = x_val
         lf_metrics[0] = ("precision", x_val)
 
