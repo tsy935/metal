@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from metal.contrib.slicing.online_dp import SliceHatModel
+from metal.contrib.slicing.online_dp import SliceHatModel, SliceOnlineModel
 from metal.contrib.slicing.utils import get_L_weights_from_targeting_lfs_idx
 from metal.end_model import EndModel
 from metal.label_model.baselines import WeightedLabelVoter
@@ -45,7 +45,7 @@ def create_data_loader(Ls, Xs, Ys, Zs, model_config, split):
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
-def train_model(config, Ls, Xs, Ys, Zs, L_weights=None):
+def train_model(config, Ls, Xs, Ys, Zs, L_weights=None, model_key="hat"):
     """
     Generates weak labels and trains a single model
 
@@ -60,7 +60,13 @@ def train_model(config, Ls, Xs, Ys, Zs, L_weights=None):
     slice_kwargs = config.get("slice_kwargs")
     if slice_kwargs:
         m = Ls[0].shape[1]  # number of LFs
-        model = SliceHatModel(model, m, **slice_kwargs)
+        
+        if model_key == "hat":
+            model = SliceHatModel(model, m, **slice_kwargs)
+        elif model_key == "online":
+            model = SliceOnlineModel(model, m, **slice_kwargs)
+        else:
+            raise Exception("Model key not recognized.")
 
     # Create data loaders
     train_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "train")
@@ -192,9 +198,7 @@ def search_upweighting_models(
 
 def parse_history(history, num_slices):
     # NOTE: VC changed this from `s+1` --> `s`, so it works w/ pacman synthetics
-    REPORTING_GROUPS = ["all"] + [
-        f"slice_{s}" for s in range(num_slices)
-    ]
+    REPORTING_GROUPS = ["all"] + [f"slice_{s}" for s in range(num_slices)]
     METRIC_NAME = "accuracy"
 
     model_scores_by_slice = defaultdict(dict)
