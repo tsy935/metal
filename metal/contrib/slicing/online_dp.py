@@ -252,8 +252,9 @@ class SliceHatModel(EndModel):
         # wherever the user deals with it.
 
         abstains = L == 0
-        # To turn off masking:
-        abstains = torch.ones_like(L).byte()
+        # To turn off masking, uncomment the following:
+        # self.warn_once("Masking is turned off!")
+        # abstains = torch.zeros_like(L).byte()
 
         L = L.clone()
         L[L == 0] = 0.5  # Abstains are ambivalent (0 logit)
