@@ -321,10 +321,27 @@ def plot_labels(X, Y, title="Classes", point_size=1.0):
     plt.gca().set_aspect("equal", adjustable="box")
 
 
-def plot_lfs(X, L):
+def plot_lfs(X, L, point_size=1.0):
     # TODO: implement me
+    m = L.shape[1]
+    labels = set(np.unique(L))
+
+    # don't plot abstains
+    labels.remove(0)
+
+    # loop through all labels for each LF, and plot in appropriate color
+    for lf_idx in range(m):
+        for label in labels:
+            label_mask = L[:, lf_idx] == label
+            lf_no_abstains = L[label_mask, lf_idx]
+            plt.scatter(
+                X[label_mask, 0],
+                X[label_mask, 1],
+                color=color_map(lf_no_abstains),
+                s=point_size,
+            )
+
     plt.gca().set_aspect("equal", adjustable="box")
-    pass
 
 
 def plot_slices(X, Z, title="Slices", **kwargs):
