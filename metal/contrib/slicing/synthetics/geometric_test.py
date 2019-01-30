@@ -11,21 +11,18 @@ from metal.contrib.slicing.experiment_utils import (
     train_model,
 )
 from metal.contrib.slicing.mixture_of_experts import train_MoE_model
-from metal.contrib.slicing.online_dp import MLPModule, SliceHatModel
 from metal.contrib.slicing.synthetics.geometric_synthetics import (
     generate_dataset,
 )
-from metal.contrib.slicing.utils import get_L_weights_from_targeting_lfs_idx
-from metal.end_model import EndModel
 from metal.label_model import MajorityLabelVoter
 from metal.utils import split_data
 
 # NOTE: each model can take a "train_kwargs"
 
-### SHARED PIECES
+# SHARED PIECES
 end_model_init_kwargs = {"layer_out_dims": [2, 10, 10, 2], "verbose": False}
 
-### FULL CONFIGS
+# FULL CONFIGS
 dp_config = {"end_model_init_kwargs": end_model_init_kwargs}
 
 uni_config = {"end_model_init_kwargs": end_model_init_kwargs}

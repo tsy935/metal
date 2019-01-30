@@ -4,8 +4,8 @@ import torch.nn.functional as F
 
 from metal.classifier import Classifier
 from metal.end_model.em_defaults import em_default_config
+from metal.end_model.identity_module import IdentityModule
 from metal.end_model.loss import SoftCrossEntropyLoss
-from metal.modules import IdentityModule
 from metal.utils import MetalDataset, hard_to_soft, recursive_merge_dicts
 
 
@@ -202,7 +202,9 @@ class EndModel(Classifier):
         )
         return loss_fn
 
-    def train_model(self, train_data, dev_data=None, log_writer=None, **kwargs):
+    def train_model(
+        self, train_data, valid_data=None, log_writer=None, **kwargs
+    ):
         self.config = recursive_merge_dicts(self.config, kwargs)
 
         # If train_data is provided as a tuple (X, Y), we can make sure Y is in
@@ -223,7 +225,7 @@ class EndModel(Classifier):
 
         # Execute training procedure
         self._train_model(
-            train_loader, loss_fn, dev_data=dev_data, log_writer=log_writer
+            train_loader, loss_fn, valid_data=valid_data, log_writer=log_writer
         )
 
     def predict_proba(self, X):

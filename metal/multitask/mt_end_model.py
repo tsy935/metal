@@ -7,8 +7,8 @@ import torch.nn.functional as F
 
 from metal.end_model import EndModel
 from metal.end_model.em_defaults import em_default_config
+from metal.end_model.identity_module import IdentityModule
 from metal.end_model.loss import SoftCrossEntropyLoss
-from metal.modules import IdentityModule
 from metal.multitask import MTClassifier, TaskGraph
 from metal.multitask.mt_em_defaults import mt_em_default_config
 from metal.utils import recursive_merge_dicts
@@ -53,9 +53,9 @@ class MTEndModel(MTClassifier, EndModel):
     ):
 
         kwargs["layer_out_dims"] = layer_out_dims
-        kwargs["input_modules"] = input_modules
-        kwargs["middle_modules"] = middle_modules
-        kwargs["head_modules"] = head_modules
+        # kwargs["input_modules"] = input_modules
+        # kwargs["middle_modules"] = middle_modules
+        # kwargs["head_modules"] = head_modules
 
         config = recursive_merge_dicts(
             em_default_config, mt_em_default_config, misses="insert"

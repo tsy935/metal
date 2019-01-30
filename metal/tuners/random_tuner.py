@@ -14,7 +14,7 @@ class RandomSearchTuner(ModelTuner):
     def search(
         self,
         search_space,
-        dev_data,
+        valid_data,
         init_args=[],
         train_args=[],
         init_kwargs={},
@@ -25,12 +25,13 @@ class RandomSearchTuner(ModelTuner):
         shuffle=True,
         verbose=True,
         clean_up=True,
+        seed=None,
         **score_kwargs,
     ):
         """
         Args:
             search_space: see config_generator() documentation
-            dev_data: a tuple of Tensors (X,Y), a Dataset, or a DataLoader of
+            valid_data: a tuple of Tensors (X,Y), a Dataset, or a DataLoader of
                 X (data) and Y (labels) for the dev split
             init_args: (list) positional args for initializing the model
             train_args: (list) positional args for training the model
@@ -49,18 +50,20 @@ class RandomSearchTuner(ModelTuner):
         parameters, including the network architecture (which is defined before
         the train loop).
         """
-        self._clear_state()
+        self._clear_state(seed)
         self.search_space = search_space
 
         # Generate configs
-        configs = self.config_generator(search_space, max_search, shuffle)
+        configs = self.config_generator(
+            search_space, max_search, self.rng, shuffle
+        )
 
         # Commence search
         for i, config in enumerate(configs):
             score, model = self._test_model_config(
                 i,
                 config,
-                dev_data,
+                valid_data,
                 init_args=init_args,
                 train_args=train_args,
                 init_kwargs=init_kwargs,

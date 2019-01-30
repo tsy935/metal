@@ -6,6 +6,7 @@ from itertools import cycle, product
 from time import strftime, time
 
 import numpy as np
+import pandas as pd
 
 from metal.utils import recursive_merge_dicts
 
@@ -68,14 +69,13 @@ class ModelTuner(object):
         if seed is None:
             self.seed = 0
         else:
-            random.seed(seed)
             self.seed = seed
 
         # Search state
         # NOTE: Must be cleared each run with self._clear_state()!
-        self._clear_state()
+        self._clear_state(self.seed)
 
-    def _clear_state(self):
+    def _clear_state(self, seed=None):
         """Clears the state, starts clock"""
         self.start_time = time()
         self.run_stats = []
@@ -86,11 +86,15 @@ class ModelTuner(object):
         # Note: These must be set at the start of self.search()
         self.search_space = None
 
+        # Reset the seed
+        if seed is not None:
+            self.rng = random.Random(seed)
+
     def _test_model_config(
         self,
         idx,
         config,
-        dev_data,
+        valid_data,
         init_args=[],
         train_args=[],
         init_kwargs={},
@@ -102,6 +106,7 @@ class ModelTuner(object):
     ):
 
         # Integrating generated config into init kwargs and train kwargs
+        init_kwargs["verbose"] = verbose
         init_kwargs = recursive_merge_dicts(
             init_kwargs, config, misses="insert"
         )
@@ -145,20 +150,23 @@ class ModelTuner(object):
         # Initialize a new LogWriter and train the model, returning the score
         log_writer = None
         if self.log_writer_class is not None:
-            log_writer = self.log_writer_class(
-                log_dir=self.log_subdir,
-                run_dir=".",
-                run_name=f"model_search_{idx}",
-            )
+            writer_config = {
+                "log_dir": self.log_subdir,
+                "run_dir": ".",
+                "run_name": f"model_search_{idx}",
+            }
+            log_writer = self.log_writer_class(writer_config)
+
         model.train_model(
             *train_args,
             **train_kwargs,
-            dev_data=dev_data,
+            valid_data=valid_data,
+            verbose=verbose,
             log_writer=log_writer,
         )
 
         score = model.score(
-            dev_data,
+            valid_data,
             metric=self.validation_metric,
             verbose=False,  # Score is already printed in train_model above
             **score_kwargs,
@@ -202,10 +210,20 @@ class ModelTuner(object):
         with open(self.report_path, "w") as f:
             json.dump(self.run_stats, f, indent=1)
 
+    def run_stats_df(self):
+        """Returns self.run_stats over search params as pandas dataframe."""
+
+        run_stats_df = []
+        for x in self.run_stats:
+            search_results = {**x["search_params"]}
+            search_results["score"] = x["score"]
+            run_stats_df.append(search_results)
+        return pd.DataFrame(run_stats_df)
+
     def search(
         self,
         search_space,
-        dev_data,
+        valid_data,
         init_args=[],
         train_args=[],
         init_kwargs={},
@@ -220,7 +238,7 @@ class ModelTuner(object):
         """
         Args:
             search_space: see config_generator() documentation
-            dev_data: a tuple of Tensors (X,Y), a Dataset, or a DataLoader of
+            valid_data: a tuple of Tensors (X,Y), a Dataset, or a DataLoader of
                 X (data) and Y (labels) for the dev split
             init_args: (list) positional args for initializing the model
             train_args: (list) positional args for training the model
@@ -241,7 +259,7 @@ class ModelTuner(object):
         raise NotImplementedError()
 
     @staticmethod
-    def config_generator(search_space, max_search, shuffle=True):
+    def config_generator(search_space, max_search, rng, shuffle=True):
         """Generates config dicts from the given search space
 
         Args:
@@ -321,7 +339,7 @@ class ModelTuner(object):
         discrete_configs = list(dict_product(discretes))
 
         if shuffle:
-            random.shuffle(discrete_configs)
+            rng.shuffle(discrete_configs)
 
         # If there are range parameters and a non-None max_search, cycle
         # through the discrete_configs (with new range values) until
@@ -335,5 +353,5 @@ class ModelTuner(object):
             if max_search and i == max_search:
                 break
             for k, v in ranges.items():
-                config[k] = float(v(random.random()))
+                config[k] = float(v(rng.random()))
             yield config

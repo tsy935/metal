@@ -25,4 +25,7 @@ events.out*
 # Local data and notebooks
 data/*
 notebooks/local/*
+
+# Logs
 checkpoints/
+events.out.tfevents*

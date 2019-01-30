@@ -4,7 +4,7 @@
 
 [![Build Status](https://travis-ci.com/HazyResearch/metal.svg?branch=master)](https://travis-ci.com/HazyResearch/metal)
 
-**_v0.3.3_**
+**_v0.4.0_**
 
 ## Getting Started
 * Quickly [set up](#setup) your environment
@@ -33,7 +33,7 @@ This makes it significantly more scalable than our previous approaches.
 
 ## Q & A
 One of the best places to look for Q&A (besides the doc strings) is the Issues page.
-We tag issues that might be aprticularly helpful with the "reference question" label; see them [here](https://github.com/HazyResearch/metal/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22reference+question%22).
+We tag issues that might be particularly helpful with the "reference question" label; see them [here](https://github.com/HazyResearch/metal/issues?utf8=%E2%9C%93&q=is%3Aissue+label%3A%22reference+question%22).
 
 ## Sample Usage
 This sample is for a single-task problem. 
@@ -60,7 +60,7 @@ Y_train_pred = label_model.predict(L_train)
 
 # Train a discriminative end model with the generated labels
 end_model = EndModel([1000,10,2])
-end_model.train_model(train_data=(X_train, Y_train_pred), dev_data=(X_dev, Y_dev))
+end_model.train_model(train_data=(X_train, Y_train_pred), valid_data=(X_dev, Y_dev))
 
 # Evaluate performance
 score = end_model.score(X_test, Y_test)
@@ -91,7 +91,7 @@ nosetests
 If the tests run successfully, you should see 50+ dots followed by "OK".  
 Check out the [tutorials](tutorials/) to get familiar with the Snorkel MeTaL codebase!
 
-Or, to use Snorkel Metal in another project, install it with pip (conda coming soon):
+Or, to use Snorkel Metal in another project, install it with pip:
 ```
 pip install snorkel-metal
 ```

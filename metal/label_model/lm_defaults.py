@@ -24,12 +24,25 @@ lm_default_config = {
             "sgd_config": {"momentum": 0.9},
         },
         # Scheduler
-        "scheduler_config": {"scheduler": None},
-        # Checkpointer
-        "checkpoint": False,
+        "lr_scheduler": None,
         # Train loop
         "n_epochs": 100,
         "print_every": 10,
         "disable_prog_bar": True,  # Disable progress bar each epoch
+        # Logger
+        "logger": True,
+        "logger_config": {
+            "log_unit": "epochs",  # ['seconds', 'examples', 'batches', 'epochs']
+            "log_train_every": 1,  # How often train loss is reported
+            "log_train_metrics": ["train/loss"],
+            "log_train_metrics_func": None,
+            "log_valid_every": 1,
+            "log_valid_metrics": [],
+            "log_valid_metrics_func": None,
+        },
+        # Writer
+        "writer": None,
+        # Checkpointer
+        "checkpoint": False,
     },
 }

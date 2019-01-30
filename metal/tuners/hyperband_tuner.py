@@ -32,6 +32,7 @@ class HyperbandTuner(ModelTuner):
         run_name=None,
         log_writer_class=None,
         seed=None,
+        **tuner_args,
     ):
         super().__init__(
             model_class,
@@ -40,6 +41,7 @@ class HyperbandTuner(ModelTuner):
             run_name=run_name,
             log_writer_class=log_writer_class,
             seed=seed,
+            **tuner_args,
         )
 
         # Set random seed (Note this only makes sense in single threaded mode)
@@ -72,8 +74,8 @@ class HyperbandTuner(ModelTuner):
             # Print a message indicating what the below schedule means
             print(
                 "Table consists of tuples of "
-                "(num configs, num_resources_per_config)"
-                "which specify how many configs to run and"
+                "(num configs, num_resources_per_config) "
+                "which specify how many configs to run and "
                 "for how many epochs. "
             )
             print(
@@ -156,7 +158,7 @@ class HyperbandTuner(ModelTuner):
     def search(
         self,
         search_space,
-        dev_data,
+        valid_data,
         init_args=[],
         train_args=[],
         init_kwargs={},
@@ -166,6 +168,7 @@ class HyperbandTuner(ModelTuner):
         max_search=None,
         shuffle=True,
         verbose=True,
+        seed=None,
         **score_kwargs,
     ):
         """
@@ -179,7 +182,7 @@ class HyperbandTuner(ModelTuner):
         Args:
             init_args: (list) positional args for initializing the model
             train_args: (list) positional args for training the model
-            dev_data: a tuple of Tensors (X,Y), a Dataset, or a DataLoader of
+            valid_data: a tuple of Tensors (X,Y), a Dataset, or a DataLoader of
                 X (data) and Y (labels) for the dev split
             search_space: see ModelTuner's config_generator() documentation
             max_search: see ModelTuner's config_generator() documentation
@@ -194,7 +197,8 @@ class HyperbandTuner(ModelTuner):
         parameters, including the network architecture (which is defined before
         the train loop).
         """
-        self._clear_state()
+        self._clear_state(seed)
+        self.search_space = search_space
 
         # Loop over each bracket
         n_models_scored = 0
@@ -206,6 +210,7 @@ class HyperbandTuner(ModelTuner):
                 self.config_generator(
                     search_space,
                     max_search=n_starting_configurations,
+                    rng=self.rng,
                     shuffle=True,
                 )
             )
@@ -228,7 +233,7 @@ class HyperbandTuner(ModelTuner):
                     score, model = self._test_model_config(
                         f"{band_index}_{i}",
                         configuration,
-                        dev_data,
+                        valid_data,
                         init_args=init_args,
                         train_args=train_args,
                         init_kwargs=init_kwargs,

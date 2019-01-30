@@ -4,10 +4,10 @@ channels:
   - conda-forge
 dependencies:  # New core deps should also be added to setup.py for pip
   - python=3.6
-  - networkx=2
+  - networkx>=2.2
   - numpy
   - pandas
-  - pytorch=0.4.1
+  - pytorch=1.0
   - scipy
   - tqdm  # Packages below this line are optional (testing, notebooks, etc.)
   - matplotlib=3
@@ -16,3 +16,4 @@ dependencies:  # New core deps should also be added to setup.py for pip
   - nb_conda_kernels
   - runipy
   - scikit-learn
+  - torchvision
