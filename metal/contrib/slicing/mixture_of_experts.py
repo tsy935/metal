@@ -56,7 +56,7 @@ def train_MoE_model(config, Ls, Xs, Ys, Zs, verbose=True):
 
         # train expert
         expert_kwargs = config.get("expert_train_kwargs", {})
-        expert.train_model(train_loader, dev_data=dev_loader, **expert_kwargs)
+        expert.train_model(train_loader, valid_data=dev_loader, **expert_kwargs)
         score = expert.score(dev_loader, verbose=verbose)
         if verbose:
             print(f"Dev Score on L{lf_idx} examples:", score)
@@ -69,7 +69,7 @@ def train_MoE_model(config, Ls, Xs, Ys, Zs, verbose=True):
     dev_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "dev")
 
     train_kwargs = config.get("train_kwargs", {})
-    MoE.train_model(train_loader, dev_data=dev_loader, **train_kwargs)
+    MoE.train_model(train_loader, valid_data=dev_loader, **train_kwargs)
     return MoE
 
 
@@ -139,7 +139,9 @@ class MoEModel(Classifier):
     def predict_proba(self, X):
         return F.softmax(self.weighted_experts(X), dim=0).detach().numpy()
 
-    def train_model(self, train_data, dev_data=None, log_writer=None, **kwargs):
+    def train_model(
+        self, train_data, valid_data=None, log_writer=None, **kwargs
+    ):
         self.config = recursive_merge_dicts(self.config, kwargs)
 
         # If train_data is provided as a tuple (X, Y), we can make sure Y is in
@@ -154,14 +156,14 @@ class MoEModel(Classifier):
 
         # Convert input data to data loaders
         train_loader = self._create_data_loader(train_data, shuffle=True)
-        dev_loader = self._create_data_loader(dev_data, shuffle=False)
+        dev_loader = self._create_data_loader(valid_data, shuffle=False)
 
         # Create loss function
         loss_fn = self._get_loss_fn()
 
         # Execute training procedure
         self._train_model(
-            train_loader, loss_fn, dev_data=dev_loader, log_writer=log_writer
+            train_loader, loss_fn, valid_data=dev_loader, log_writer=log_writer
         )
 
     def _preprocess_Y(self, Y, k):

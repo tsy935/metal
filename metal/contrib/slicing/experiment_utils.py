@@ -79,7 +79,7 @@ def train_model(config, Ls, Xs, Ys, Zs, L_weights=None, model_key="hat"):
     # train model
     train_kwargs = config.get("train_kwargs", {})
     train_kwargs["disable_prog_bar"] = True
-    model.train_model(train_loader, dev_data=dev_loader, **train_kwargs)
+    model.train_model(train_loader, valid_data=dev_loader, **train_kwargs)
 
     return model
 
@@ -114,7 +114,7 @@ def train_slice_dp(config, Ls, Xs, Ys, Zs):
     slice_orig = SliceDPModel(input_module, m=m, **config["slice_kwargs"])
 
     slice_orig.train_model(
-        train_loader, dev_data=dev_loader, **config["train_kwargs"]
+        train_loader, valid_data=dev_loader, **config["train_kwargs"]
     )
 
     return slice_orig
@@ -222,7 +222,7 @@ def search_upweighting_models(
 
         train_kwargs = config.get("train_kwargs", {})
         train_kwargs["disable_prog_bar"] = True
-        model.train_model(train_loader, dev_data=dev_loader, **train_kwargs)
+        model.train_model(train_loader, valid_data=dev_loader, **train_kwargs)
         score = model.score(dev_loader, verbose=verbose)
         if score > best_score:
             # TODO: save model with best slice-specific scores.. but need to define which slice
