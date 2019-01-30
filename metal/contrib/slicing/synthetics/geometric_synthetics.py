@@ -341,6 +341,7 @@ def plot_lfs(X, L, point_size=1.0):
                 s=point_size,
             )
 
+    plt.title("LFs")
     plt.gca().set_aspect("equal", adjustable="box")
 
 
