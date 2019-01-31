@@ -271,6 +271,8 @@ def create_slices(
         elif slice_source == "conflicts":
             min_dist = max_a * 1.25
             centers = select_conflicted_points(X, L, num_slices, min_dist)
+        elif slice_source == "maxmin":
+            centers = select_maxmin_points(X, L, num_slices)
         else:
             raise Exception(f"Unrecognized slice_source: {slice_source}")
 
@@ -294,15 +296,36 @@ def create_slices(
 
 
 def select_conflicted_points(X, L, num_slices, min_dist):
+    def dist(x, y):
+        return np.sqrt(sum((np.array(x) - np.array(y)) ** 2))
+
+    ranked_examples = rank_by_conflict(X, L)
+    # Pick centers in most conflicted areas while maintaining distance
+    centers = []
+    i = 0
+    while len(centers) < num_slices:
+        score, x = ranked_examples[i]
+        if any(dist(x, c) < min_dist for c in centers):
+            i += 1
+            continue
+        centers.append(x)
+    return centers
+
+
+def select_maxmin_points(X, L, num_slices):
+    assert num_slices == 2
+    ranked_examples = rank_by_conflict(X, L)
+    centers = [ranked_examples[0][1], ranked_examples[-1][1]]
+    return centers
+
+
+def rank_by_conflict(X, L):
     def conflict_func(votes):
         assert 0 not in votes
         counter = Counter(votes)
         num_votes = len(votes)
         num_pairs = (num_votes - abs(counter[1] - counter[2])) / 2
         return num_pairs + 0.01 * num_votes
-
-    def dist(x, y):
-        return np.sqrt(sum((np.array(x) - np.array(y)) ** 2))
 
     votes_by_example = []
     for i, x in enumerate(X):
@@ -314,16 +337,7 @@ def select_conflicted_points(X, L, num_slices, min_dist):
         key=lambda x: x[0],
         reverse=True,
     )
-    # Pick centers in most conflicted areas while maintaining distance
-    centers = []
-    i = 0
-    while len(centers) < num_slices:
-        score, x = ranked_examples[i]
-        if any(dist(x, c) < min_dist for c in centers):
-            i += 1
-            continue
-        centers.append(x)
-    return centers
+    return ranked_examples
 
 
 def assign_y(X, Y, region, label):
