@@ -397,7 +397,7 @@ class SliceOnlineModel(EndModel):
 
         abstains = L == 0
         # To turn off masking:
-        # abstains = torch.ones_like(L).byte()
+        abstains = torch.ones_like(L).byte()
 
         L = L.clone()
         L[L == 0] = 0.5  # Abstains are ambivalent (0 logit)
