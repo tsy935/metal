@@ -186,10 +186,17 @@ class SliceHatModel(EndModel):
             0: there is no L head (it is a vanilla EndModel)
             1: there is no Y head (it learns only to predict Ys)
         reweight: (bool) if True, use attention to reweight the neck
+        masking: (bool) if True, ignore loss in L head for abstains
     """
 
     def __init__(
-        self, base_model, m, slice_weight=0.1, reweight=True, **kwargs
+        self,
+        base_model,
+        m,
+        slice_weight=0.1,
+        reweight=True,
+        mask_abstains=True,
+        **kwargs
     ):
         # NOTE: rather than using em_default_config, we use base_model.config
         kwargs["slice_weight"] = slice_weight  # Add to kwargs so it merges
@@ -208,6 +215,7 @@ class SliceHatModel(EndModel):
         self.m = m
         self.slice_weight = slice_weight
         self.reweight = reweight
+        self.mask_abstains = mask_abstains
         self.build_model(base_model)
 
         # Show network
@@ -251,10 +259,12 @@ class SliceHatModel(EndModel):
         # into the model; for consistency in the code, we leave L in {0,1,2}
         # wherever the user deals with it.
 
-        abstains = L == 0
+        if self.mask_abstains:
+            abstains = L == 0
+        else:
+            abstains = torch.zeros_like(L).byte()
         # To turn off masking, uncomment the following:
         # self.warn_once("Masking is turned off!")
-        # abstains = torch.zeros_like(L).byte()
 
         L = L.clone()
         L[L == 0] = 0.5  # Abstains are ambivalent (0 logit)
@@ -265,13 +275,11 @@ class SliceHatModel(EndModel):
         if self.has_L_head:
             L_logits = self.forward_L(neck)
             # Weight loss by lf weights if applicable and mask abstains
-            L_loss_masked = (
-                self.L_criteria(L_logits, L.float())
-                .masked_fill(abstains, 0)
-                .sum(dim=1)
-            )
-            # Get average L loss by example per lf
-            L_loss = torch.mean(L_loss_masked, dim=0) / self.m
+            L_loss = self.L_criteria(L_logits, L.float())
+            if self.mask_abstains:
+                L_loss = L_loss.masked_fill(abstains, 0)
+            # Get average L loss per example per lf
+            L_loss = torch.mean(L_loss.sum(dim=1), dim=0) / self.m
         else:
             L_logits = None
             L_loss = 0
