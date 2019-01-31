@@ -25,9 +25,9 @@ def generate_dataset(
     Y_kwargs={"num_clusters": 4, "min_a": 1, "max_a": 3},
     Z_kwargs={"num_slices": 4, "min_a": 1, "max_a": 2},
     unipolar=False,
+    slice_source="lfs",  # ['lfs', 'random', 'conflicts']
     point_size=1.0,
     plotting=True,
-    return_targeting_lfs=False,
     seed=None,
 ):
     # Set random seed
@@ -45,7 +45,9 @@ def generate_dataset(
     # Create lfs
     L, lf_regions = create_lfs(X, Y, m, unipolar, **L_kwargs)
     # Create slices
-    Z, slice_regions = create_slices(X, Y, lf_regions, **Z_kwargs)
+    Z, slice_regions = create_slices(
+        X, Y, L, slice_source, lf_regions, **Z_kwargs
+    )
     if plotting:
         plot_all(L, X, Y, Z)
         plt.show()
@@ -56,7 +58,7 @@ def generate_dataset(
     assert isinstance(Y, np.ndarray)
     assert isinstance(Z, np.ndarray)
 
-    if return_targeting_lfs:
+    if slice_source == "lfs":
         lfs_targeting_regions = []
         for region in slice_regions:
             lf_targeting_region = [
@@ -65,9 +67,9 @@ def generate_dataset(
             ]
             lf_idx = lf_targeting_region.index(True)
             lfs_targeting_regions.append(lf_idx)
-        return L, X, Y, Z, lfs_targeting_regions
     else:
-        return L, X, Y, Z
+        lfs_targeting_regions = None
+    return L, X, Y, Z, lfs_targeting_regions
 
 
 # BUILDING BLOCKS
@@ -240,7 +242,15 @@ def create_lfs(
 
 
 def create_slices(
-    X, Y, lf_regions=None, num_slices=4, min_slice_size=20, min_a=1, max_a=2
+    X,
+    Y,
+    L,
+    slice_source,
+    lf_regions=None,
+    num_slices=4,
+    min_slice_size=20,
+    min_a=1,
+    max_a=2,
 ):
     n, d = X.shape
     regions = []
@@ -248,20 +258,26 @@ def create_slices(
     satisfied = False
 
     while not satisfied:
-        if lf_regions is not None:
+        if slice_source == "random":
+            centers = X[np.random.choice(range(n), num_slices), :]
+        elif slice_source == "lfs":
+            assert lf_regions is not None
             centers = [
                 reg.center()
                 for reg in np.random.choice(
                     lf_regions, num_slices, replace=False
                 )
             ]
+        elif slice_source == "conflicts":
+            min_dist = max_a * 1.25
+            centers = select_conflicted_points(X, L, num_slices, min_dist)
         else:
-            centers = X[np.random.choice(range(n), num_slices), :]
+            raise Exception(f"Unrecognized slice_source: {slice_source}")
 
         for i in range(num_slices):
             x, y = centers[i]
-            a = np.random.uniform(1, 2)
-            b = np.random.uniform(1, 2)
+            a = np.random.uniform(min_a, max_a)
+            b = np.random.uniform(min_a, max_a)
             region = Ellipse(x, y, a, b)
             regions.append(region)
             Z = assign_y(X, Z, region, i + 1)
@@ -275,6 +291,39 @@ def create_slices(
             Z = np.zeros(n)
 
     return Z, regions
+
+
+def select_conflicted_points(X, L, num_slices, min_dist):
+    def conflict_func(votes):
+        assert 0 not in votes
+        counter = Counter(votes)
+        num_votes = len(votes)
+        num_pairs = (num_votes - abs(counter[1] - counter[2])) / 2
+        return num_pairs + 0.01 * num_votes
+
+    def dist(x, y):
+        return np.sqrt(sum((np.array(x) - np.array(y)) ** 2))
+
+    votes_by_example = []
+    for i, x in enumerate(X):
+        votes = [int(l) for l in L[i, :] if l != 0]
+        votes_by_example.append((x, votes))
+    # Rank points by maximum conflicting labels
+    ranked_examples = sorted(
+        [(conflict_func(votes), x) for (x, votes) in votes_by_example],
+        key=lambda x: x[0],
+        reverse=True,
+    )
+    # Pick centers in most conflicted areas while maintaining distance
+    centers = []
+    i = 0
+    while len(centers) < num_slices:
+        score, x = ranked_examples[i]
+        if any(dist(x, c) < min_dist for c in centers):
+            i += 1
+            continue
+        centers.append(x)
+    return centers
 
 
 def assign_y(X, Y, region, label):
@@ -310,13 +359,23 @@ def plot_all(L, X, Y, Z, fig_size=12):
     plt.sca(axs[0])
     plot_labels(X, Y)
     plt.sca(axs[1])
-    plot_lfs(X, L)
+    # plot_lfs(X, L)
+    plot_coverage(X, L)
     plt.sca(axs[2])
     plot_slices(X, Z)
 
 
 def plot_labels(X, Y, title="Classes", point_size=1.0):
     plt.scatter(X[:, 0], X[:, 1], color=color_map(Y), s=point_size)
+    plt.title(title)
+    plt.gca().set_aspect("equal", adjustable="box")
+
+
+def plot_coverage(X, L, title="Coverage", point_size=1.0):
+    n, d = X.shape
+    num_votes = np.zeros(n)
+    num_votes = np.asarray(L.sum(axis=1))
+    plt.scatter(X[:, 0], X[:, 1], c=num_votes)
     plt.title(title)
     plt.gca().set_aspect("equal", adjustable="box")
 
