@@ -1,11 +1,9 @@
 from collections import Counter
 
 import numpy as np
-import torch
 from scipy.sparse import csr_matrix
 from termcolor import colored
 from torch.utils.data.sampler import WeightedRandomSampler
-from tqdm import tqdm
 
 from metal.metrics import accuracy_score, metric_score
 
