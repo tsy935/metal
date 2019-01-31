@@ -149,7 +149,7 @@ class Logger(object):
 
     def write_to_file(self, metrics_dict):
         for metric, value in metrics_dict.items():
-            self.writer.add_scalar(metric, value, self.log_unit)
+            self.writer.add_scalar(metric, value, self.unit_total)
 
     def reset(self):
         self.unit_count = 0

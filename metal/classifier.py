@@ -430,9 +430,9 @@ class Classifier(nn.Module):
         if train_config["writer"] is None:
             self.writer = None
         elif train_config["writer"] == "json":
-            self.writer = LogWriter(train_config["writer_config"])
+            self.writer = LogWriter(**(train_config["writer_config"]))
         elif train_config["writer"] == "tensorboard":
-            self.writer = TensorBoardWriter(train_config["writer_config"])
+            self.writer = TensorBoardWriter(**(train_config["writer_config"]))
         else:
             raise Exception(f"Unrecognized writer: {train_config['writer']}")
 

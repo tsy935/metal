@@ -243,6 +243,15 @@ def recursive_merge_dicts(x, y, misses="report", verbose=None):
     return z
 
 
+def recursive_transform(x, test_func, transform):
+    for k, v in x.items():
+        if test_func(v):
+            x[k] = transform(v)
+        if isinstance(v, dict):
+            recursive_transform(v, test_func, transform)
+    return x
+
+
 def split_data(
     *inputs,
     splits=[0.5, 0.5],
