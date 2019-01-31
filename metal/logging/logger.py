@@ -81,7 +81,7 @@ class Logger(object):
             )
             metrics_dict.update(custom_train_metrics)
         if self.config["log_valid_metrics_func"] is not None and log_valid:
-            custom_valid_metrics = self.config["log_train_metrics_func"](
+            custom_valid_metrics = self.config["log_valid_metrics_func"](
                 model, valid_loader
             )
             metrics_dict.update(custom_valid_metrics)
