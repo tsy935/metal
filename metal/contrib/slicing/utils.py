@@ -38,6 +38,23 @@ def add_pepper(L, pepper_pct, verbose=True):
     return L
 
 
+def unipolarize(L):
+    """Separates bipolar LFs into multiple unipolar LFs"""
+    unipolar_cols = []
+    n, m = L.shape
+    for j in range(m):
+        L_j = np.asarray(L[:, j].todense())
+        labels = np.unique(L_j)
+        for y in labels:
+            if y == 0:
+                continue
+            unipolar_cols.append((L_j == y) * y)
+    L = np.array(unipolar_cols).squeeze().transpose()
+    assert L.shape[0] == n
+    assert L.shape[1] >= m
+    return csr_matrix(L)
+
+
 def get_L_weights_from_targeting_lfs_idx(m, targeting_lfs_idx, multiplier):
     L_weights = np.ones(m)
     L_weights[targeting_lfs_idx] = multiplier
