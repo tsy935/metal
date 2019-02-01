@@ -216,7 +216,7 @@ class SliceHatModel(EndModel):
         self.slice_weight = slice_weight
         self.reweight = reweight
         self.mask_abstains = mask_abstains
-        print ("Mask Abstains:", self.mask_abstains)
+        print("Mask Abstains:", self.mask_abstains)
         self.build_model(base_model)
 
         # Show network
