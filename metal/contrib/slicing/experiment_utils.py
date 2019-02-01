@@ -10,6 +10,7 @@ from metal.contrib.slicing.online_dp import (
     SliceHatModel,
     SliceOnlineModel,
 )
+from metal.contrib.slicing.slice_model import SliceMaster
 from metal.contrib.slicing.utils import get_L_weights_from_targeting_lfs_idx
 from metal.end_model import EndModel
 from metal.label_model.baselines import WeightedLabelVoter
@@ -27,29 +28,25 @@ def create_data_loader(Ls, Xs, Ys, Zs, model_config, split):
     assert split in ["train", "dev", "test"]
 
     is_slicing = "slice_kwargs" in model_config.keys()
+    Ls_tensors = [torch.Tensor(np.asarray(L.todense())) for L in Ls]
 
     if split == "train":
-        L_train = torch.Tensor(Ls[0].todense())
-        dataset = (
-            SlicingDataset(Xs[0], L_train, Ys[0])
-            if is_slicing
-            else SlicingDataset(Xs[0], Ys[0])
-        )
+        dataset = SlicingDataset(Ls_tensors[0], Xs[0], Ys[0], Zs[0])
         shuffle = True
 
     elif split == "dev":
-        dataset = SlicingDataset(Xs[1], Ys[1])
+        dataset = SlicingDataset(Ls_tensors[1], Xs[1], Ys[1], Zs[1])
         shuffle = False
 
     elif split == "test":
-        dataset = SlicingDataset(Xs[2], Ys[2], Zs[2])
+        dataset = SlicingDataset(Ls_tensors[2], Xs[2], Ys[2], Zs[2])
         shuffle = False
 
     batch_size = model_config.get("train_kwargs", {}).get("batch_size", 32)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
-def train_model(config, Ls, Xs, Ys, Zs, L_weights=None, model_key="hat"):
+def train_model(config, Ls, Xs, Ys, Zs, L_weights=None, model_key=None):
     """
     Generates weak labels and trains a single model
 
@@ -70,7 +67,8 @@ def train_model(config, Ls, Xs, Ys, Zs, L_weights=None, model_key="hat"):
         elif model_key == "online":
             model = SliceOnlineModel(model, m, **slice_kwargs)
         else:
-            raise Exception("Model key not recognized.")
+            print (f"Default to {SliceMaster.__name__}")
+            model = SliceMaster(model, m, **slice_kwargs)
 
     # Create data loaders
     train_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "train")
@@ -132,13 +130,13 @@ def eval_model(
         model: a trained EndModel (or subclass)
         eval_loader: a loader containing X, Y, Z
     """
-    X, Y, Z = separate_eval_loader(eval_loader)
+    L, X, Y, Z = separate_eval_loader(eval_loader)
     out_dict = {}
 
     # Evaluating on full dataset
     if verbose:
         print(f"All: {len(Z)} examples")
-    scores = model.score((X, None, Y), metrics, verbose=verbose)
+    scores = model.score((None, X, Y, None), metrics, verbose=verbose)
     out_dict["all"] = {metrics[i]: scores[i] for i in range(len(metrics))}
 
     # Evaluating on slice
@@ -153,7 +151,7 @@ def eval_model(
         Y_slice = Y[inds]
 
         metrics_slice = model.score(
-            (X_slice, None, Y_slice),
+            (None, X_slice, Y_slice, None),
             metrics,
             verbose=verbose,
             break_ties=break_ties,
@@ -180,7 +178,7 @@ def separate_eval_loader(data_loader):
     # The user passes in a single data_loader and we handle splitting and
     # recombining
     for ii, data in enumerate(data_loader):
-        x_batch, y_batch, z_batch = data
+        _, x_batch, y_batch, z_batch = data
 
         X.append(x_batch)
         Y.append(y_batch)
@@ -190,7 +188,7 @@ def separate_eval_loader(data_loader):
 
     X = torch.cat(X)
     Y = torch.cat(Y)
-    return X, Y, Z
+    return _, X, Y, Z
 
 
 def search_upweighting_models(
@@ -239,7 +237,7 @@ def search_upweighting_models(
 
 def parse_history(history, num_slices):
     # NOTE: VC changed this from `s+1` --> `s`, so it works w/ pacman synthetics
-    REPORTING_GROUPS = ["all"] + [f"slice_{s}" for s in range(num_slices + 1)]
+    REPORTING_GROUPS = ["all"] + [f"slice_{s}" for s in range(1, num_slices + 1)]
     METRIC_NAME = "accuracy"
 
     model_scores_by_slice = defaultdict(dict)

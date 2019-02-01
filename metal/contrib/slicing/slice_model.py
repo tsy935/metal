@@ -125,12 +125,12 @@ class SliceMaster(EndModel):
         else:
             return self._loss
 
-    def _vanilla_loss(self, X, L, Y_s):
+    def _vanilla_loss(self, L, X, Y_s, _):
         neck = self.body(X)
         Y_off_logits = self.forward_Y_off(neck)
         return self.Y_criteria(Y_off_logits.squeeze(), Y_s[:, 0].float())
 
-    def _loss(self, X, L, Y_s):
+    def _loss(self, L, X, Y_s, _):
         """Returns the average loss per example"""
         neck = self.body(X)
 
@@ -218,13 +218,14 @@ class SliceMaster(EndModel):
 
     def _get_predictions(self, data, **kwargs):
         if isinstance(data, tuple):
-            X, L, Y = data
+            L, X, Y, Z = data
             data_loader = DataLoader(SlicingDataset(X, Y))
         elif isinstance(data, Dataset):
-            data_loader = DataLoader(data.data[0], data.data[2])
+            # eval on X, Y
+            data_loader = DataLoader(data.data[1], data.data[2])
         elif isinstance(data, DataLoader):
             data_loader = DataLoader(
-                SlicingDataset(data.dataset.data[0], data.dataset.data[2])
+                SlicingDataset(data.dataset.data[1], data.dataset.data[2])
             )
         else:
             raise NotImplementedError(
