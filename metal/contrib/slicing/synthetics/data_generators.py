@@ -148,7 +148,7 @@ def generate_pacman_data(
     class_props = props / np.linalg.norm(props)
     N = config["N"]
     labels = config["labels"]
-    lf_metrics = config["lf_metrics"]
+    # lf_metrics = config["lf_metrics"]
 
     # Set slice 1
     n_per_slice = [int(N * prop) for prop in class_props]
@@ -210,7 +210,7 @@ def generate_pacman_data(
             plt.scatter(
                 X[C == c, 0], X[C == c, 1], label=f"$S_{int(c)}$", s=0.2
             )
-        ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
+        plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
         from matplotlib import patches
 
         rect = patches.Rectangle(

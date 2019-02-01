@@ -4,10 +4,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader, Dataset
 
 from metal.classifier import Classifier
 from metal.end_model.end_model import EndModel
-from metal.utils import recursive_merge_dicts
+from metal.utils import SlicingDataset, recursive_merge_dicts
 
 slice_defaults = {
     "L_weight": 0.1,
@@ -214,6 +215,23 @@ class SliceMaster(EndModel):
             L_logits = self.forward_L(neck)
         neck = self.update_neck(neck, L_logits)
         return self.Y_head_on(neck)
+
+    def _get_predictions(self, data, **kwargs):
+        if isinstance(data, tuple):
+            X, L, Y = data
+            data_loader = DataLoader(SlicingDataset(X, Y))
+        elif isinstance(data, Dataset):
+            data_loader = DataLoader(data.data[0], data.data[2])
+        elif isinstance(data, DataLoader):
+            data_loader = DataLoader(
+                SlicingDataset(data.dataset.data[0], data.dataset.data[2])
+            )
+        else:
+            raise NotImplementedError(
+                f"Unrecognized type for data: {type(data)}"
+            )
+
+        return super()._get_predictions(data_loader, **kwargs)
 
     @torch.no_grad()
     def predict_L_proba(self, X):

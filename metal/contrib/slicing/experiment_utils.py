@@ -122,7 +122,7 @@ def train_slice_dp(config, Ls, Xs, Ys, Zs):
 def eval_model(
     model,
     eval_loader,
-    metrics=["accuracy", "precision", "recall", "f1"],
+    metrics=["accuracy"],
     verbose=True,
     summary=True,
     break_ties="random",
@@ -138,8 +138,8 @@ def eval_model(
     # Evaluating on full dataset
     if verbose:
         print(f"All: {len(Z)} examples")
-    metrics_full = model.score((X, Y), metrics, verbose=verbose)
-    out_dict["all"] = {metrics[i]: metrics_full[i] for i in range(len(metrics))}
+    scores = model.score((X, None, Y), metrics, verbose=verbose)
+    out_dict["all"] = {metrics[i]: scores[i] for i in range(len(metrics))}
 
     # Evaluating on slice
     slices = sorted(set(Z))
@@ -153,7 +153,10 @@ def eval_model(
         Y_slice = Y[inds]
 
         metrics_slice = model.score(
-            (X_slice, Y_slice), metrics, verbose=verbose, break_ties=break_ties
+            (X_slice, None, Y_slice),
+            metrics,
+            verbose=verbose,
+            break_ties=break_ties,
         )
 
         out_dict[f"slice_{s}"] = {
