@@ -78,7 +78,6 @@ def train_model(config, Ls, Xs, Ys, Zs, L_weights=None, model_key="hat"):
 
     # train model
     train_kwargs = config.get("train_kwargs", {})
-    train_kwargs["disable_prog_bar"] = True
     model.train_model(train_loader, valid_data=dev_loader, **train_kwargs)
 
     return model
@@ -221,7 +220,6 @@ def search_upweighting_models(
         train_loader = create_data_loader(Ls, Xs, Ys, Zs, config, "train")
 
         train_kwargs = config.get("train_kwargs", {})
-        train_kwargs["disable_prog_bar"] = True
         model.train_model(train_loader, valid_data=dev_loader, **train_kwargs)
         score = model.score(dev_loader, verbose=verbose)
         if score > best_score:
@@ -238,7 +236,7 @@ def search_upweighting_models(
 
 def parse_history(history, num_slices):
     # NOTE: VC changed this from `s+1` --> `s`, so it works w/ pacman synthetics
-    REPORTING_GROUPS = ["all"] + [f"slice_{s}" for s in range(num_slices+1)]
+    REPORTING_GROUPS = ["all"] + [f"slice_{s}" for s in range(num_slices + 1)]
     METRIC_NAME = "accuracy"
 
     model_scores_by_slice = defaultdict(dict)
