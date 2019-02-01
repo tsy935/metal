@@ -18,32 +18,17 @@ import os
 import random
 import sys
 from collections import defaultdict
-from time import strftime, time
 
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import torch
 from synthetics_utils import generate_synthetic_data
-from torch.utils.data import DataLoader
 from visualization_utils import (
     compare_prediction_plots,
     plot_slice_scores,
     visualize_data,
 )
 
-from metal.contrib.logging.tensorboard import TensorBoardWriter
-from metal.contrib.slicing.mixture_of_experts import train_MoE_model
-from metal.contrib.slicing.online_dp import (
-    LinearModule,
-    MLPModule,
-    SliceDPModel,
-)
-from metal.contrib.slicing.utils import (
-    compute_lf_accuracies,
-    generate_weak_labels,
-    get_weighted_sampler_via_targeting_lfs,
-)
+from metal.contrib.slicing.online_dp import MLPModule, SliceDPModel
 from metal.end_model import EndModel
 
 # Import tqdm_notebook if in Jupyter notebook
@@ -100,7 +85,7 @@ experiment_config = {
         "n_epochs": 20,
         "print_every": 10,
         "validation_metric": "accuracy",
-        "disable_prog_bar": True,
+        "progress_bar": False,
         "lr": 0.005,
         "checkpoint_runway": 5,
     },
@@ -306,17 +291,17 @@ def simulate(data_config, generate_data_fn, experiment_config, model_configs):
                 X[train_end_idx:dev_end_idx],
                 X[dev_end_idx:],
             )
-            Y_train, Y_dev, Y_test = (
+            _, Y_dev, Y_test = (
                 Y[:train_end_idx],
                 Y[train_end_idx:dev_end_idx],
                 Y[dev_end_idx:],
             )
-            C_train, C_dev, C_test = (
+            _, _, C_test = (
                 C[:train_end_idx],
                 C[train_end_idx:dev_end_idx],
                 C[dev_end_idx:],
             )
-            L_train, L_dev, L_test = (
+            L_train, L_dev, _ = (
                 L[:train_end_idx],
                 L[train_end_idx:dev_end_idx],
                 L[dev_end_idx:],
