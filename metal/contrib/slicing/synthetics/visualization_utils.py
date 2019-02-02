@@ -157,16 +157,24 @@ def plot_slice_scores(
         plt.savefig(os.path.join(savedir, "results.png"))
 
 
-def plot_predictions(X_test, Y_test, model, C=None):
-    Y_p, Y = model._get_predictions((X_test, Y_test))
+def plot_predictions(model, test_loader, C=None):
+    L_test, X_test, Y_test, Z_test = test_loader.dataset.data
 
-    # correct_idx = np.where(Y_p == Y)[0]
+    Y_p, Y = model._get_predictions((None, X_test, Y_test, None))
+
+    correct_idx = np.where(Y_p == Y)[0]
     wrong_idx = np.where(Y_p != Y)[0]
     if C is not None:
         for c in np.unique(C):
             c_idx = np.where(C == c)[0]
             plt.scatter(X_test[c_idx, 0], X_test[c_idx, 1], s=3)
-    #    plt.scatter(X_test[correct_idx, 0], X_test[correct_idx, 1], c='grey', label='correct', s=7)
+    plt.scatter(
+        X_test[correct_idx, 0],
+        X_test[correct_idx, 1],
+        c="green",
+        label="correct prediction",
+        s=10,
+    )
     plt.scatter(
         X_test[wrong_idx, 0],
         X_test[wrong_idx, 1],
