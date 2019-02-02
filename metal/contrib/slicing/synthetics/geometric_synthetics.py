@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from scipy.sparse import csr_matrix
+from scipy.spatial import ConvexHull
 
 # SCRIPT
 
@@ -20,11 +21,11 @@ def generate_dataset(
         "max_acc": 0.9,
         "min_prop": 0.5,
         "max_prop": 0.9,
+        "unipolar": False,
     },
     X_kwargs={"random": False},
     Y_kwargs={"num_clusters": 4, "min_a": 1, "max_a": 3},
     Z_kwargs={"num_slices": 4, "min_a": 1, "max_a": 2},
-    unipolar=False,
     slice_source="lfs",  # ['lfs', 'random', 'conflicts']
     point_size=1.0,
     plotting=True,
@@ -43,7 +44,7 @@ def generate_dataset(
     # Create labels
     Y, label_regions = create_labels(X, k, **Y_kwargs)
     # Create lfs
-    L, lf_regions = create_lfs(X, Y, m, unipolar, **L_kwargs)
+    L, lf_regions = create_lfs(X, Y, m, **L_kwargs)
     # Create slices
     Z, slice_regions = create_slices(
         X, Y, L, slice_source, lf_regions, **Z_kwargs
@@ -389,7 +390,13 @@ def plot_coverage(X, L, title="Coverage", point_size=1.0):
     n, d = X.shape
     num_votes = np.zeros(n)
     num_votes = np.asarray(L.sum(axis=1))
-    plt.scatter(X[:, 0], X[:, 1], c=num_votes)
+    plt.scatter(X[:, 0], X[:, 1], c=num_votes, s=point_size)
+    plt.title(title)
+    plt.gca().set_aspect("equal", adjustable="box")
+
+
+def plot_probs(X, Y_probs, title="Y_probs", point_size=1.0):
+    plt.scatter(X[:, 0], X[:, 1], c=Y_probs, s=point_size)
     plt.title(title)
     plt.gca().set_aspect("equal", adjustable="box")
 
@@ -402,6 +409,19 @@ def plot_lfs(X, L):
 
 def plot_slices(X, Z, title="Slices", **kwargs):
     plot_labels(X, Z, title=title, **kwargs)
+
+
+def plot_convex_hull(points, color="g"):
+    hull = ConvexHull(points)
+    vertices = np.hstack((hull.vertices, hull.vertices[0]))
+    marker = f"{color}--"
+    plt.plot(points[vertices, 0], points[vertices, 1], marker, lw=2)
+
+
+def plot_region(X, region, **kwargs):
+    idxs = [i for i, x in enumerate(X) if x in region]
+    points = X[idxs, :]
+    plot_convex_hull(points, **kwargs)
 
 
 def color_map(Y):
