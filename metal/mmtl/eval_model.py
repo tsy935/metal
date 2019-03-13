@@ -95,8 +95,9 @@ def ensemble_preds(predictions):
             # average scores for regression tasks
             final_pred = preds.mean(0)
         final_pred = final_pred.flatten()
-        # if task_name == 'STSB':
-        #    final_pred = final_pred * (final_pred > 0) * (final_pred < 5) + 5 * (final_pred > 5)
+        if task_name == "STSB":
+            #    final_pred = final_pred * (final_pred > 0) * (final_pred < 5) + 5 * (final_pred > 5)
+            final_pred = [round(x, 3) for x in list(final_pred)]
         ensemble_preds[(task_name, state)] = list(final_pred)
     return ensemble_preds
 
@@ -246,8 +247,7 @@ if __name__ == "__main__":
                             else:
                                 # STSB is a regression task so we directly return scores
                                 predicted_labels = [
-                                    round(inv_label_fn(pred), 3)
-                                    for pred in Y_probs.flatten()
+                                    inv_label_fn(pred) for pred in Y_probs.flatten()
                                 ]
                             if (task.name, state) in predictions:
                                 predictions[(task.name, state)].append(predicted_labels)
