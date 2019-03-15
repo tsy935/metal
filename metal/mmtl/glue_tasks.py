@@ -158,20 +158,7 @@ def create_tasks(task_names, **kwargs):
             include_segments=(config["encoder_type"] == "bert"),
         )
 
-        if task_name == "COLA":
-            scorer = Scorer(
-                standard_metrics=["accuracy"],
-                custom_metric_funcs={matthews_corr: ["matthews_corr"]},
-            )
-            task = ClassificationTask(
-                task_name,
-                dataloaders,
-                input_module,
-                BinaryHead(neck_dim),
-                scorer,
-                attention_module=get_attention_module(config, neck_dim),
-            )
-        if task_name == "COLA_long":
+        if "COLA" in task_name:
             scorer = Scorer(
                 standard_metrics=["accuracy"],
                 custom_metric_funcs={matthews_corr: ["matthews_corr"]},
@@ -185,21 +172,7 @@ def create_tasks(task_names, **kwargs):
                 attention_module=get_attention_module(config, neck_dim),
             )
 
-        if task_name == "COLA_questions":
-            scorer = Scorer(
-                standard_metrics=["accuracy"],
-                custom_metric_funcs={matthews_corr: ["matthews_corr"]},
-            )
-            task = ClassificationTask(
-                task_name,
-                dataloaders,
-                input_module,
-                BinaryHead(neck_dim),
-                scorer,
-                attention_module=get_attention_module(config, neck_dim),
-            )
-
-        elif task_name == "SST2":
+        elif "SST2" in task_name:
             task = ClassificationTask(
                 task_name,
                 dataloaders,
@@ -208,7 +181,7 @@ def create_tasks(task_names, **kwargs):
                 attention_module=get_attention_module(config, neck_dim),
             )
 
-        elif task_name == "MNLI":
+        elif "MNLI" in task_name:
             task = ClassificationTask(
                 task_name,
                 dataloaders,
@@ -218,7 +191,7 @@ def create_tasks(task_names, **kwargs):
                 attention_module=get_attention_module(config, neck_dim),
             )
 
-        elif task_name == "RTE":
+        elif "RTE" in task_name:
             task = ClassificationTask(
                 task_name,
                 dataloaders,
@@ -228,7 +201,7 @@ def create_tasks(task_names, **kwargs):
                 attention_module=get_attention_module(config, neck_dim),
             )
 
-        elif task_name == "WNLI":
+        elif "WNLI" in task_name:
             task = ClassificationTask(
                 task_name,
                 dataloaders,
@@ -238,7 +211,7 @@ def create_tasks(task_names, **kwargs):
                 attention_module=get_attention_module(config, neck_dim),
             )
 
-        elif task_name == "QQP":
+        elif "QQP" in task_name:
             task = ClassificationTask(
                 task_name,
                 dataloaders,
@@ -248,7 +221,7 @@ def create_tasks(task_names, **kwargs):
                 attention_module=get_attention_module(config, neck_dim),
             )
 
-        elif task_name == "MRPC":
+        elif "MRPC" in task_name:
             task = ClassificationTask(
                 task_name,
                 dataloaders,
@@ -258,7 +231,7 @@ def create_tasks(task_names, **kwargs):
                 attention_module=get_attention_module(config, neck_dim),
             )
 
-        elif task_name == "STSB":
+        elif "STSB" in task_name:
             scorer = Scorer(
                 standard_metrics=[],
                 custom_metric_funcs={
@@ -279,7 +252,7 @@ def create_tasks(task_names, **kwargs):
                 attention_module=get_attention_module(config, neck_dim),
             )
 
-        elif task_name == "QNLI":
+        elif "QNLI" in task_name:
             task = ClassificationTask(
                 task_name,
                 dataloaders,
@@ -287,125 +260,6 @@ def create_tasks(task_names, **kwargs):
                 BinaryHead(neck_dim),
                 Scorer(standard_metrics=["accuracy"]),
                 attention_module=get_attention_module(config, neck_dim),
-            )
-
-        # --------- NON-STANDARD TASK HEADS BELOW THIS POINT ---------
-
-        elif task_name == "MNLI_SAN":
-            task = ClassificationTask(
-                "MNLI",
-                dataloaders,
-                SAN(
-                    bert_model=bert_encoder,
-                    emb_size=neck_dim,
-                    hidden_size=neck_dim,
-                    num_classes=3,
-                    k=5,
-                ),
-                AverageLayer(),
-                Scorer(standard_metrics=["accuracy"]),
-                attention_module=get_attention_module(config, neck_dim),
-            )
-
-        elif task_name == "RTE_SAN":
-            task = ClassificationTask(
-                "RTE",
-                dataloaders,
-                SAN(
-                    bert_model=bert_encoder,
-                    emb_size=neck_dim,
-                    hidden_size=neck_dim,
-                    num_classes=2,
-                    k=5,
-                ),
-                AverageLayer(),
-                Scorer(standard_metrics=["accuracy"]),
-                attention_module=get_attention_module(config, neck_dim),
-            )
-
-        elif task_name == "WNLI_SAN":
-            task = ClassificationTask(
-                "WNLI",
-                dataloaders,
-                SAN(
-                    bert_model=bert_encoder,
-                    emb_size=neck_dim,
-                    hidden_size=neck_dim,
-                    num_classes=2,
-                    k=5,
-                ),
-                AverageLayer(),
-                Scorer(standard_metrics=["accuracy"]),
-                attention_module=get_attention_module(config, neck_dim),
-            )
-
-        elif task_name == "QQP_SAN":
-            task = ClassificationTask(
-                "QQP",
-                dataloaders,
-                SAN(
-                    bert_model=bert_encoder,
-                    emb_size=neck_dim,
-                    hidden_size=neck_dim,
-                    num_classes=2,
-                    k=5,
-                ),
-                AverageLayer(),
-                Scorer(custom_metric_funcs={acc_f1: ["accuracy", "f1", "acc_f1"]}),
-                attention_module=get_attention_module(config, neck_dim),
-            )
-
-        elif task_name == "MRPC_SAN":
-            task = ClassificationTask(
-                "MRPC",
-                dataloaders,
-                SAN(
-                    bert_model=bert_encoder,
-                    emb_size=neck_dim,
-                    hidden_size=neck_dim,
-                    num_classes=2,
-                    k=5,
-                ),
-                AverageLayer(),
-                Scorer(custom_metric_funcs={acc_f1: ["accuracy", "f1", "acc_f1"]}),
-                attention_module=get_attention_module(config, neck_dim),
-            )
-
-        elif task_name == "QNLIR":
-            # QNLI ranking task
-            def ranking_loss(scores, y_true, gamma=1.0):
-                scores = torch.sigmoid(scores)
-                # TODO: find consistent way to map labels to {0,1}
-                y_true = (1 - y_true) + 1
-                # TODO: if we're using dev set then these computations won't work
-                # make sure we don't compute loss for evaluation
-                max_pool = nn.MaxPool1d(kernel_size=2, stride=2)
-                pos_scores = torch.exp(
-                    gamma
-                    * (max_pool((y_true * scores.view(-1)).view(1, 1, -1)).view(-1))
-                )
-                neg_scores = torch.exp(
-                    gamma
-                    * (max_pool(((1 - y_true) * scores.view(-1)).view(1, 1, -1))).view(
-                        -1
-                    )
-                )
-                log_likelihood = torch.log(pos_scores / (pos_scores + neg_scores))
-                return -torch.mean(log_likelihood)
-
-            scorer = Scorer(
-                custom_metric_funcs={ranking_acc_f1: ["accuracy", "f1", "acc_f1"]},
-                standard_metrics=[],
-            )
-            task = ClassificationTask(
-                name="QNLIR",
-                data_loaders=dataloaders,
-                input_module=input_module,
-                head_module=RegressionHead(neck_dim),
-                scorer=scorer,
-                attention_module=get_attention_module(config, neck_dim),
-                loss_hat_func=ranking_loss,
-                output_hat_func=torch.sigmoid,
             )
 
         # --------- AUXILIARY TASKS BELOW THIS POINT ---------

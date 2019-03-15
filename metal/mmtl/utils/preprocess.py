@@ -45,10 +45,10 @@ def get_task_tsv_config(task_name, split):
     """ Returns the tsv_config to be used in params of GLUEDataset.form_tsv for
     specific task and split. """
 
-    if task_name == "QNLI":
+    if "QNLI" in task_name:
         label_fn, inv_label_fn = get_label_fn({"entailment": 1, "not_entailment": 2})
         return {
-            "tsv_path": tsv_path_for_dataset("QNLI", split),
+            "tsv_path": tsv_path_for_dataset(task_name, split),
             "sent1_idx": 1,
             "sent2_idx": 2,
             "label_idx": 3 if split in ["train", "dev"] else -1,
@@ -57,13 +57,13 @@ def get_task_tsv_config(task_name, split):
             "inv_label_fn": inv_label_fn,
             "label_type": int,
         }
-    elif task_name == "STSB":
+    elif "STSB" in task_name:
         label_fn, inv_label_fn = (
             lambda x: float(x) / 5,
             lambda x: float(x) * 5,
         )  # labels are continuous [0, 5]
         return {
-            "tsv_path": tsv_path_for_dataset("STS-B", split),
+            "tsv_path": tsv_path_for_dataset(task_name, split),
             "sent1_idx": 7,
             "sent2_idx": 8,
             "label_idx": 9 if split in ["train", "dev"] else -1,
@@ -72,10 +72,10 @@ def get_task_tsv_config(task_name, split):
             "inv_label_fn": inv_label_fn,
             "label_type": float,
         }
-    elif task_name == "SST2":
+    elif "SST2" in task_name:
         label_fn, inv_label_fn = get_label_fn({"1": 1, "0": 2})  # reserve 0 for abstain
         return {
-            "tsv_path": tsv_path_for_dataset("SST-2", split),
+            "tsv_path": tsv_path_for_dataset(task_name, split),
             "sent1_idx": 0 if split in ["train", "dev"] else 1,
             "sent2_idx": -1,
             "label_idx": 1 if split in ["train", "dev"] else -1,
@@ -84,7 +84,7 @@ def get_task_tsv_config(task_name, split):
             "inv_label_fn": inv_label_fn,
             "label_type": int,
         }
-    elif task_name in ["COLA", "COLA_questions", "COLA_long"]:
+    elif "COLA" in task_name:
         label_fn, inv_label_fn = get_label_fn({"1": 1, "0": 2})
         return {
             "tsv_path": tsv_path_for_dataset(task_name, split),
@@ -96,7 +96,7 @@ def get_task_tsv_config(task_name, split):
             "inv_label_fn": inv_label_fn,
             "label_type": int,
         }
-    elif task_name == "MNLI":
+    elif "MNLI" in task_name:
         gold_cols = {
             "train": 11,
             "dev": 15,
@@ -113,7 +113,7 @@ def get_task_tsv_config(task_name, split):
         )
 
         return {
-            "tsv_path": tsv_path_for_dataset("MNLI", split),
+            "tsv_path": tsv_path_for_dataset(task_name, split),
             "sent1_idx": 8 if split != "diagnostic" else 1,
             "sent2_idx": 9 if split != "diagnostic" else 2,
             "label_idx": gold_cols[split],
@@ -122,10 +122,10 @@ def get_task_tsv_config(task_name, split):
             "inv_label_fn": inv_label_fn,
             "label_type": int,
         }
-    elif task_name == "RTE":
+    elif "RTE" in task_name:
         label_fn, inv_label_fn = get_label_fn({"entailment": 1, "not_entailment": 2})
         return {
-            "tsv_path": tsv_path_for_dataset("RTE", split),
+            "tsv_path": tsv_path_for_dataset(task_name, split),
             "sent1_idx": 1,
             "sent2_idx": 2,
             "label_idx": 3 if split in ["train", "dev"] else -1,
@@ -134,10 +134,10 @@ def get_task_tsv_config(task_name, split):
             "inv_label_fn": inv_label_fn,
             "label_type": int,
         }
-    elif task_name == "WNLI":
+    elif "WNLI" in task_name:
         label_fn, inv_label_fn = get_label_fn({"1": 1, "0": 2})
         return {
-            "tsv_path": tsv_path_for_dataset("WNLI", split),
+            "tsv_path": tsv_path_for_dataset(task_name, split),
             "sent1_idx": 1,
             "sent2_idx": 2,
             "label_idx": 3 if split in ["train", "dev"] else -1,
@@ -146,10 +146,10 @@ def get_task_tsv_config(task_name, split):
             "inv_label_fn": inv_label_fn,
             "label_type": int,
         }
-    elif task_name == "QQP":
+    elif "QQP" in task_name:
         label_fn, inv_label_fn = get_label_fn({"1": 1, "0": 2})
         return {
-            "tsv_path": tsv_path_for_dataset("QQP", split),
+            "tsv_path": tsv_path_for_dataset(task_name, split),
             "sent1_idx": 3 if split in ["train", "dev"] else 1,
             "sent2_idx": 4 if split in ["train", "dev"] else 2,
             "label_idx": 5 if split in ["train", "dev"] else -1,
@@ -158,10 +158,10 @@ def get_task_tsv_config(task_name, split):
             "inv_label_fn": inv_label_fn,
             "label_type": int,
         }
-    elif task_name == "MRPC":
+    elif "MRPC" in task_name:
         label_fn, inv_label_fn = get_label_fn({"1": 1, "0": 2})
         return {
-            "tsv_path": tsv_path_for_dataset("MRPC", split),
+            "tsv_path": tsv_path_for_dataset(task_name, split),
             "sent1_idx": 3,
             "sent2_idx": 4,
             "label_idx": 0,
