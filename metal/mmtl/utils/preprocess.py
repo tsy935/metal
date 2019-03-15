@@ -84,10 +84,10 @@ def get_task_tsv_config(task_name, split):
             "inv_label_fn": inv_label_fn,
             "label_type": int,
         }
-    elif task_name == "COLA":
+    elif task_name in ["COLA", "COLA_questions", "COLA_long"]:
         label_fn, inv_label_fn = get_label_fn({"1": 1, "0": 2})
         return {
-            "tsv_path": tsv_path_for_dataset("CoLA", split),
+            "tsv_path": tsv_path_for_dataset(task_name, split),
             "sent1_idx": 3 if split in ["train", "dev"] else 1,
             "sent2_idx": -1,
             "label_idx": 1 if split in ["train", "dev"] else -1,

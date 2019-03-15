@@ -171,6 +171,33 @@ def create_tasks(task_names, **kwargs):
                 scorer,
                 attention_module=get_attention_module(config, neck_dim),
             )
+        if task_name == "COLA_long":
+            scorer = Scorer(
+                standard_metrics=["accuracy"],
+                custom_metric_funcs={matthews_corr: ["matthews_corr"]},
+            )
+            task = ClassificationTask(
+                task_name,
+                dataloaders,
+                input_module,
+                BinaryHead(neck_dim),
+                scorer,
+                attention_module=get_attention_module(config, neck_dim),
+            )
+
+        if task_name == "COLA_questions":
+            scorer = Scorer(
+                standard_metrics=["accuracy"],
+                custom_metric_funcs={matthews_corr: ["matthews_corr"]},
+            )
+            task = ClassificationTask(
+                task_name,
+                dataloaders,
+                input_module,
+                BinaryHead(neck_dim),
+                scorer,
+                attention_module=get_attention_module(config, neck_dim),
+            )
 
         elif task_name == "SST2":
             task = ClassificationTask(

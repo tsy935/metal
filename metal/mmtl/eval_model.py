@@ -232,8 +232,7 @@ if __name__ == "__main__":
                         score = task.scorer.score(model, task)
                         print(score)
 
-                    if True:
-                        # else:
+                    else:
                         for state, split in zip(states, splits):
                             # predict on test set
                             Y, Y_probs, Y_preds = model._predict_probs(

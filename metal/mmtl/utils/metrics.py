@@ -63,6 +63,8 @@ def pearson_spearman(gold, outputs, probs):
 
 
 GLUE_METRICS = {
+    "COLA_long": "matthews_corr",
+    "COLA_questions": "matthews_corr",
     "COLA": "matthews_corr",
     "SST2": "accuracy",
     "MRPC": "acc_f1",
