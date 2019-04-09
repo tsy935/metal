@@ -6,36 +6,12 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 import torch
-from torch.utils.data as Dataset
+from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import Sampler, SubsetRandomSampler
 from tqdm import tqdm
 
 from metal.mmtl.cxr.cxr_preprocess import get_task_config
 from metal.utils import padded_tensor, set_seed
-
-
-DATASET_CLASS_DICT = {
-                "CXR8": CXR8Dataset,
-                }
-
-
-def get_cxr_dataset(dataset_name, split, subsample=None, tasks="ALL", **kwargs):
-    """ Create and returns specified cxr dataset based on image path."""
-
-    # MODIFY THIS TO GET THE RIGHT LOCATIONS FOR EACH!!
-    config = get_task_config(dataset_name, split, subsample, tasks)
-    dataset_class = DATASET_CLASS_DICT[dataset_name]
-
-    return dataset_class(
-        config["path_to_images"],
-        config["path_to_labels"],
-        split,
-        transform=config["transform"],
-        subample=config["subsample"],
-        tasks=config["tasks"],
-        get_uid=config["get_uid"], 
-        **kwargs,
-    )
 
 class CXR8Dataset(Dataset):
     """
@@ -52,22 +28,24 @@ class CXR8Dataset(Dataset):
         split,
         transform=None, # Currently no support for this
         subsample=0,
-        tasks="ALL",
+        finding="ALL",
+        pooled=False,
         get_uid=False,
     ):
 
         self.transform = transform
         self.path_to_images = path_to_images
         self.path_to_labels = path_to_labels
-        self.df = pd.read_csv(self.path_to_labels)
+        self.df = pd.read_csv(self.path_to_labels, sep='\t')
+        self.df.columns = map(str.upper, self.df.columns)
         self.get_uid = get_uid
         self.labels = {}
-        finding=tasks
+        self.pooled = pooled
 
         # can limit to sample, useful for testing
         # if fold == "train" or fold =="val": sample=500
         if subsample > 0 and subsample < len(self.df):
-            self.df = self.df.sample(sample)
+            self.df = self.df.sample(subsample)
 
         if (
             not finding == "ALL"
@@ -76,42 +54,47 @@ class CXR8Dataset(Dataset):
                 if len(self.df[self.df[finding] == 1]) > 0:
                     self.df = self.df[self.df[finding] == 1]
                 else:
-                    print(
+                   raise ValueError(
                         "No positive cases exist for "
                         + LABEL
                         + ", returning all unfiltered cases"
                     )
             else:
-                print(
+                raise ValueError(
                     "cannot filter on finding "
                     + finding
                     + " as not in data - please check spelling"
                 )
 
-        self.uids = self.df["Image Index"].tolist()
-        self.df = self.df.set_index("Image Index")
+        self.uids = self.df["IMAGE INDEX"].tolist()
+        self.df = self.df.set_index("IMAGE INDEX")
         self.PRED_LABEL = [
-            "ATELECTASIS",
-            "CARDIOMEGALY",
-            "EFFUSION",
-            "INFILTRATION",
-            "MASS",
-            "NODULE",
-            "PNEUMONIA",
-            "PNEUMOTHORAX",
-            "CONSOLIDATION",
-            "EDEMA",
-            "EMPHYSEMA",
-            "FIBROSIS",
-            "PLEURAL THICKENING",
-            "HERNIA",
+            "Atelectasis",
+            "Cardiomegaly",
+            "Effusion",
+            "Infiltration",
+            "Mass",
+            "Nodule",
+            "Pneumonia",
+            "Pneumothorax",
+            "Consolidation",
+            "Edema",
+            "Emphysema",
+            "Fibrosis",
+            "Pleural_Thickening",
+            "Hernia",
         ]
 
         # Adding tasks and labels -- right now, we train all labels associated with
         # a given task!
         for cls in self.PRED_LABEL:
-            label_vec = self.df[cls.strip()].astype("int") > 0
-            self.labels[cls] = torch.Tensor(label_vec) 
+            label_vec = self.df[cls.upper().strip()].astype("int") > 0
+            # Converting to metal format: 0 abstain, 2 negative
+            label_vec[label_vec==0] = 2
+            if self.pooled:
+                self.labels[cls.upper()] = np.array(label_vec).astype(int) 
+            else:
+                self.labels[f"CXR8:{cls.upper()}"] = np.array(label_vec).astype(int)
 
     def __getitem__(self, idx):
 
@@ -123,13 +106,13 @@ class CXR8Dataset(Dataset):
 
         x = image
         ys = {
-            task_name: label_set[index] for task_name, label_set in self.labels.items() 
+            task_name: label_set[idx] for task_name, label_set in self.labels.items() 
         }
 
-        if self.get_filename:
-            return x, ys
-        else:
+        if self.get_uid:
             return x, ys, uid
+        else:
+            return x, ys
 
     def __len__(self):
         return len(self.df)
@@ -153,14 +136,14 @@ class CXR8Dataset(Dataset):
             dev_idx = full_idx[split_div:]
             
             # create data loaders
-            train_dataloader = data.DataLoader(
+            train_dataloader = DataLoader(
                 self,
                 collate_fn=self._collate_fn,
                 sampler=SubsetRandomSampler(train_idx),
                 **kwargs,
             )
             
-            dev_dataloader = data.DataLoader(
+            dev_dataloader = DataLoader(
                 self,
                 collate_fn=self._collate_fn,
                 sampler=SubsetRandomSampler(dev_idx),
@@ -170,7 +153,7 @@ class CXR8Dataset(Dataset):
             return train_dataloader, dev_dataloader
 
         else:
-            return data.DataLoader(self, collate_fn=self._collate_fn, **kwargs)
+            return DataLoader(self, collate_fn=self._collate_fn, **kwargs)
 
     def _collate_fn(self, batch_list): 
         """Collates batch of (images, labels) into padded (X, Ys) tensors
@@ -183,16 +166,17 @@ class CXR8Dataset(Dataset):
                 labels for that task
         """
         Y_lists = {task_name: [] for task_name in self.labels}
-        
+        X_list = []
         for instance in batch_list:
             x, ys = instance
             image = x
             for task_name, y in ys.items():
                 Y_lists[task_name].append(y)
+            X_list.append(x)
         
-        X = image
+        Xs = torch.stack(X_list)
         Ys = self._collate_labels(Y_lists)
-        return X, Ys
+        return Xs, Ys
 
     def _collate_labels(self, Ys): 
         """Collate potentially multiple label_sets 
@@ -209,12 +193,14 @@ class CXR8Dataset(Dataset):
         Convert each Y in Ys from: 
             list of scalars (instance labels) -> [n,] tensor 
             list of tensors/lists/arrays (token labels) -> [n, seq_len] padded tensor 
-        """ 
+        """
         for task_name, Y in Ys.items(): 
             if isinstance(Y[0], int): 
-                Y = torch.tensor(Y, dtype=torch.long) 
-            elif isinstance(Y[0], np.integer): 
-                Y = torch.from_numpy(Y) 
+                Y = torch.tensor(Y, dtype=torch.long)
+            elif isinstance(Y[0], torch.Tensor) and len(Y[0].size())==0:
+                Y = torch.tensor(Y, dtype=torch.float) 
+            elif isinstance(Y[0], np.integer):
+                Y = torch.from_numpy(np.array(Y)) 
             elif isinstance(Y[0], float): 
                 Y = torch.tensor(Y, dtype=torch.float) 
             elif isinstance(Y[0], np.float): 
@@ -222,7 +208,7 @@ class CXR8Dataset(Dataset):
             elif ( 
                 isinstance(Y[0], list) 
                 or isinstance(Y[0], np.ndarray) 
-                or isinstance(Y[0], torch.Tensor) 
+                or isinstance(Y[0], torch.Tensor) and len(Y[0].size())>0
             ): 
                 if isinstance(Y[0][0], (int, np.integer)): 
                     dtype = torch.long 
@@ -247,4 +233,32 @@ class CXR8Dataset(Dataset):
                 Y = Y.view(-1, 1) 
             Ys[task_name] = Y 
         return Ys 
+
+DATASET_CLASS_DICT = { 
+                "CXR8": CXR8Dataset, 
+                } 
+ 
+ 
+def get_cxr_dataset(dataset_name, split, subsample=None, finding="ALL", pooled=False, **kwargs): 
+    """ Create and returns specified cxr dataset based on image path.""" 
+ 
+    # MODIFY THIS TO GET THE RIGHT LOCATIONS FOR EACH!!
+    if ":" in dataset_name:
+        dataset_name = dataset_name.split(':')[0]
+    if ":" in finding:
+        finding = finding.split(':')[1] 
+    config = get_task_config(dataset_name, split, subsample, finding) 
+    dataset_class = DATASET_CLASS_DICT[dataset_name] 
+ 
+    return dataset_class( 
+        config["path_to_images"], 
+        config["path_to_labels"], 
+        split, 
+        transform=config["transform"], 
+        subsample=config["subsample"], 
+        finding=config["finding"], 
+        pooled=False, 
+        get_uid=config["get_uid"],
+        **kwargs, 
+    ) 
 

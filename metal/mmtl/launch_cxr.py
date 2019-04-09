@@ -1,6 +1,8 @@
 """
 Example command to run all 9 tasks: python launch.py --tasks COLA,SST2,MNLI,RTE,WNLI,QQP,MRPC,STSB,QNLI --checkpoint_dir ckpt --batch_size 16
 """
+import faulthandler
+faulthandler.enable()
 
 import argparse
 import datetime
@@ -17,7 +19,6 @@ from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
 from metal.utils import add_flags_from_config, recursive_merge_dicts
 
 logging.basicConfig(level=logging.INFO)
-
 
 def get_dir_name(models_dir):
     """Gets a directory to save the model.
@@ -106,7 +107,9 @@ if __name__ == "__main__":
 
     # Getting tasks
     tasks, payloads = create_tasks_and_payloads(task_names, **task_config)
-
+    
+    # TEST ASSERT FOR TASKS = TASKS IN PAYLOADS
+    # np.array_equal(np.array([t.name for t in tasks]), np.array(payloads[0].task_names))
     model_config["verbose"] = False
     model = MetalModel(tasks, **model_config)
 
@@ -114,7 +117,7 @@ if __name__ == "__main__":
         model.load_weights(args.model_weights)
 
     # add metadata to trainer_config that will be logged to disk
-    trainer_config["n_paramaters"] = sum(
+    trainer_config["n_parameters"] = sum(
         p.numel() for p in model.parameters() if p.requires_grad
     )
 
