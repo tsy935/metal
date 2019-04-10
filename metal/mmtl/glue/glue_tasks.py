@@ -399,7 +399,10 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
                         slice_labels = create_slice_labels(
                             dataset, base_task_name=task_name, slice_name=slice_name
                         )
-                        payload.add_label_set(slice_task_name, slice_labels)
+                        labelset_slice_name = f"{task_name}_slice:{slice_name}"
+                        payload.add_label_set(
+                            slice_task_name, labelset_slice_name, slice_labels
+                        )
 
                 payloads.append(payload)
 

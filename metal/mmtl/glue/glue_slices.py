@@ -70,7 +70,7 @@ def is_statement_has_question(dataset, idx):
 
 def ends_with_question_mark(dataset, idx):
     """Returns True if last token is '?" symbol"""
-    bert_ints = dataset.bert_tokens[idx]
+    bert_ints = dataset.bert_tokens[idx].tolist()
     bert_tokens = dataset.bert_tokenizer.convert_ids_to_tokens(bert_ints)
 
     # last token is '[SEP]'
@@ -80,7 +80,7 @@ def ends_with_question_mark(dataset, idx):
 
 def dash_semicolon(dataset, idx):
     """Returns True if there is a dash or semicolon in sentence1"""
-    bert_ints = dataset.bert_tokens[idx]
+    bert_ints = dataset.bert_tokens[idx].tolist()
     bert_tokens = dataset.bert_tokenizer.convert_ids_to_tokens(bert_ints)
     return "-" in bert_tokens or ";" in bert_tokens
 
@@ -105,7 +105,8 @@ def create_slice_labels(dataset, base_task_name, slice_name, verbose=False):
     slice_indicators = torch.tensor(
         [slice_fn(dataset, idx) for idx in range(len(dataset))], dtype=torch.uint8
     ).view(-1, 1)
-    Y_base = dataset.labels[base_task_name]
+
+    Y_base = dataset.labels[f"{base_task_name}_gold"]
     Y_slice = Y_base.clone().masked_fill_(slice_indicators == 0, 0)
 
     if verbose:
