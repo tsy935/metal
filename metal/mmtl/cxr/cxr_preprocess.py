@@ -31,12 +31,16 @@ def get_label_fn(input_dict):
     reverse_dict = {y: x for x, y in input_dict.items()}
     return input_dict.get, reverse_dict.get
 
-def transform_for_dataset(dataset_name, dataset_split):
+def transform_for_dataset(dataset_name, dataset_split, kwargs):
 
     if dataset_split in ["val", "valid", "test", "dev"]:
         dataset_split = "val"
 
-    if dataset_name == "CXR8":
+    # Getting resolution kwarg
+    res = kwargs.get("res",224)
+    print(f"Using resolution {res}...")
+
+    if "CXR8" in dataset_name:
         # use imagenet mean,std for normalization
         mean = [0.485, 0.456, 0.406]
         std = [0.229, 0.224, 0.225]
@@ -46,36 +50,40 @@ def transform_for_dataset(dataset_name, dataset_split):
             "train": transforms.Compose(
                 [   
                     transforms.RandomHorizontalFlip(),
-                    transforms.Scale(1024),
+                    transforms.Scale(res),
                     # because scale doesn't always give 224 x 224, this ensures 224 x
                     # 224
-                    transforms.CenterCrop(1024),
+                    transforms.CenterCrop(res),
                     transforms.ToTensor(),
                     transforms.Normalize(mean, std),
                 ]
             ),
             "val": transforms.Compose(
                 [   
-                    transforms.Scale(1024),
-                    transforms.CenterCrop(1024),
+                    transforms.Scale(res),
+                    transforms.CenterCrop(res),
                     transforms.ToTensor(),
                     transforms.Normalize(mean, std),
                 ]
             ),
         }
+
+    else:
+        print("No transforms found for {dataset_name} dataset!")
+
     return data_transforms[dataset_split]
 
 
-def get_task_config(dataset_name, split, subsample, finding):
+def get_task_config(dataset_name, split, subsample, finding, transform_kwargs):
     """ Returns the tsv_config to be used in params of CXRDataset.from_tsv for
     specific task and split. """
 
-    if dataset_name == "CXR8":
+    if "CXR8" in dataset_name:
         label_fn, inv_label_fn = get_label_fn({"1": 1, "0": 2})
         return {
-            "path_to_labels": tsv_path_for_dataset("CXR8", split),
-            "path_to_images": "/data/datasets/nih/images/images", 
-            "transform": transform_for_dataset("CXR8", split),
+            "path_to_labels": tsv_path_for_dataset(dataset_name, split),
+            "path_to_images": os.environ["CXR8IMAGES"], 
+            "transform": transform_for_dataset(dataset_name, split, transform_kwargs),
             "subsample": subsample,
             "finding": finding,
             "label_type": int,

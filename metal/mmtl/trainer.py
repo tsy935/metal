@@ -47,7 +47,7 @@ trainer_defaults = {
     "commit_hash": None,
     "ami": None,  # ami id for aws
     # Display
-    "progress_bar": False,
+    "progress_bar": True,
     # Dataloader
     # TODO: Restore the option for them to pass in raw simple data which we wrap up
     # "data_loader_config": {"batch_size": 32, "num_workers": 1, "shuffle": True},
@@ -374,6 +374,11 @@ class MultitaskTrainer(object):
             full_model_path = os.path.join(self.writer.log_subdir, "model.pkl")
             torch.save(model, full_model_path, pickle_module=dill)
             print(f"Full model saved at {full_model_path}")
+
+            # pickle and save the dataloaders
+            dataloader_path = os.path.join(self.writer.log_subdir, "dataloaders.pkl")
+            with open(dataloader_path,'rb') as fl:
+                pickle.dump(dataloaders,fl)
 
     def _execute_logging(self, model, payloads, batch_size, force_log=False):
         model.eval()

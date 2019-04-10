@@ -29,8 +29,11 @@ class CXR8Dataset(Dataset):
         transform=None, # Currently no support for this
         subsample=0,
         finding="ALL",
+        dataset_name="CXR8",
         pooled=False,
         get_uid=False,
+        slice_labels=None,
+        single_task=None,
     ):
 
         self.transform = transform
@@ -41,6 +44,8 @@ class CXR8Dataset(Dataset):
         self.get_uid = get_uid
         self.labels = {}
         self.pooled = pooled
+        self.single_task = single_task
+        self.dataset_name = dataset_name
 
         # can limit to sample, useful for testing
         # if fold == "train" or fold =="val": sample=500
@@ -85,16 +90,23 @@ class CXR8Dataset(Dataset):
             "Hernia",
         ]
 
+        classes = self.PRED_LABEL
+        if slice_labels is not None:
+            if isinstance(slice_labels,str):
+                slice_labels = [slice_labels]
+            classes = classes + slice_labels
+
         # Adding tasks and labels -- right now, we train all labels associated with
         # a given task!
-        for cls in self.PRED_LABEL:
+        for cls in classes:
             label_vec = self.df[cls.upper().strip()].astype("int") > 0
             # Converting to metal format: 0 abstain, 2 negative
             label_vec[label_vec==0] = 2
             if self.pooled:
                 self.labels[cls.upper()] = np.array(label_vec).astype(int) 
             else:
-                self.labels[f"CXR8:{cls.upper()}"] = np.array(label_vec).astype(int)
+                self.labels[f"{self.dataset_name}:{cls.upper()}"] = np.array(label_vec).astype(int)
+
 
     def __getitem__(self, idx):
 
@@ -105,9 +117,15 @@ class CXR8Dataset(Dataset):
             image = self.transform(image)
 
         x = image
-        ys = {
-            task_name: label_set[idx] for task_name, label_set in self.labels.items() 
-        }
+
+        # If statement to train classifiers for single tasks outside mmtl
+        if self.single_task is not None:
+            ky = f"{self.dataset_name}:{self.single_task.upper()}" if not self.pooled else self.single_task.upper()
+            ys = self.labels[ky][idx]
+        else:
+            ys = {
+                task_name: label_set[idx] for task_name, label_set in self.labels.items() 
+            }
 
         if self.get_uid:
             return x, ys, uid
@@ -236,6 +254,7 @@ class CXR8Dataset(Dataset):
 
 DATASET_CLASS_DICT = { 
                 "CXR8": CXR8Dataset, 
+                "CXR8-DRAIN": CXR8Dataset,
                 } 
  
  
@@ -247,7 +266,8 @@ def get_cxr_dataset(dataset_name, split, subsample=None, finding="ALL", pooled=F
         dataset_name = dataset_name.split(':')[0]
     if ":" in finding:
         finding = finding.split(':')[1] 
-    config = get_task_config(dataset_name, split, subsample, finding) 
+    transform_kwargs = kwargs['transform_kwargs']
+    config = get_task_config(dataset_name, split, subsample, finding, transform_kwargs) 
     dataset_class = DATASET_CLASS_DICT[dataset_name] 
  
     return dataset_class( 
@@ -259,6 +279,6 @@ def get_cxr_dataset(dataset_name, split, subsample=None, finding="ALL", pooled=F
         finding=config["finding"], 
         pooled=False, 
         get_uid=config["get_uid"],
-        **kwargs, 
+        dataset_name = dataset_name, 
     ) 
 

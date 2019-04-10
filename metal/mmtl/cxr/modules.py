@@ -14,6 +14,14 @@ class TorchVisionEncoder(nn.Module):
             for param in self.parameters():
                 param.requires_grad = False
 
+    def get_frm_output_size(self, input_shape):
+        input_shape = list(input_shape)
+        input_shape.insert(0,1)
+        dummy_batch_size = tuple(input_shape)
+        x = torch.autograd.Variable(torch.zeros(dummy_batch_size))
+        frm_output_size =  self.forward(x).size()[1]
+        return frm_output_size
+
     def get_tv_encoder(self, net_name, pretrained, drop_rate):
         # HACK: replace linear with identity -- ideally remove this
         net = getattr(models, net_name, None)

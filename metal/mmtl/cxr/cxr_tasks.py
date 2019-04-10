@@ -49,8 +49,22 @@ MASTER_PAYLOAD_TASK_DICT = {
             "FIBROSIS",
             "PLEURAL_THICKENING",
             "HERNIA",
-        ]
-
+        ],
+    "CXR8-DRAIN":["ATELECTASIS",
+            "CARDIOMEGALY",
+            "EFFUSION",
+            "INFILTRATION",
+            "MASS",
+            "NODULE",
+            "PNEUMONIA",
+            "PNEUMOTHORAX",
+            "CONSOLIDATION",
+            "EDEMA",
+            "EMPHYSEMA",
+            "FIBROSIS",
+            "PLEURAL_THICKENING",
+            "HERNIA",
+        ],
     }    
 
 task_defaults = {
@@ -65,6 +79,11 @@ task_defaults = {
         "num_workers": 8,
         "batch_size": 16,
         "shuffle": True,  # Used only when split_prop is None; otherwise, use Sampler
+    },
+    "dataset_kwargs":{
+        "transform_kwargs":{
+            "res":224
+        },
     },
     # CNN
     "cnn_model": "densenet121",
@@ -102,7 +121,9 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
     # share cnn encoder for all tasks
     cnn_kwargs = config["cnn_kwargs"]
     cnn_model = TorchVisionEncoder(config["cnn_model"], **cnn_kwargs)
-    neck_dim = cnn_model.encode_dim
+    resolution = config["dataset_kwargs"]["transform_kwargs"]["res"]
+    input_shape = (3,resolution,resolution)
+    neck_dim = cnn_model.get_frm_output_size(input_shape)
     input_module = cnn_model
     middle_module = IdentityModule() # None for now
 
@@ -164,7 +185,8 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
             else:
                 new_payload = False
 
-        # Getting dl_kwargs
+        # Getting dl_kwargs and dataset kwargs
+        dataset_kwargs = copy.deepcopy(config["dataset_kwargs"])
         dl_kwargs = copy.deepcopy(config["dl_kwargs"])
 
         # Each data source has data_loaders to load
@@ -176,6 +198,7 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
                 pooled=config["pool_payload_tasks"],
                 finding=payload_finding,
                 verbose=True,
+                dataset_kwargs=dataset_kwargs
                 )
 
             # Wrap datasets with DataLoader objects
@@ -437,6 +460,7 @@ def create_cxr_datasets(
     finding='ALL',
     subsample=-1,
     verbose=True,
+    dataset_kwargs = {}
 ):
     if verbose:
         print(f"Loading {dataset_name} Dataset")
@@ -456,7 +480,8 @@ def create_cxr_datasets(
             dataset_name,
             split,
             subsample=subsample,
-            finding=finding
+            finding=finding,
+            **dataset_kwargs
         )
     return datasets
 
