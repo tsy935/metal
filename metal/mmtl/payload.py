@@ -77,3 +77,14 @@ class Payload(object):
             print(
                 f"Removed label_set {label_name} for task {task_name} from payload {self.name}."
             )
+
+    def retarget_labelset(self, label_name, task_name, verbose=True):
+        """Retargets a labelset to the specified task name (in labels_to_tasks). """
+
+        old_task = self.labels_to_tasks[label_name]
+        self.labels_to_tasks[label_name] = task_name
+        if verbose:
+            print(
+                f"label_set {label_name} now points to task {self.labels_to_tasks[label_name]} "
+                f"(originally, {old_task})."
+            )
