@@ -461,6 +461,7 @@ def create_cxr_datasets(
     subsample=-1,
     verbose=True,
     dataset_kwargs = {}
+    get_uid = False
 ):
     if verbose:
         print(f"Loading {dataset_name} Dataset")

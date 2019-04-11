@@ -268,6 +268,7 @@ def get_cxr_dataset(dataset_name, split, subsample=None, finding="ALL", pooled=F
         finding = finding.split(':')[1] 
     transform_kwargs = kwargs['transform_kwargs']
     config = get_task_config(dataset_name, split, subsample, finding, transform_kwargs) 
+    config["get_uid"] = kwargs.get("get_uid", False)
     dataset_class = DATASET_CLASS_DICT[dataset_name] 
  
     return dataset_class( 

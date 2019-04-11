@@ -5,6 +5,7 @@ import warnings
 from collections import defaultdict
 from pprint import pprint
 from shutil import copy2
+import pickle
 
 import dill
 import numpy as np
@@ -374,11 +375,6 @@ class MultitaskTrainer(object):
             full_model_path = os.path.join(self.writer.log_subdir, "model.pkl")
             torch.save(model, full_model_path, pickle_module=dill)
             print(f"Full model saved at {full_model_path}")
-
-            # pickle and save the dataloaders
-            dataloader_path = os.path.join(self.writer.log_subdir, "dataloaders.pkl")
-            with open(dataloader_path,'rb') as fl:
-                pickle.dump(dataloaders,fl)
 
     def _execute_logging(self, model, payloads, batch_size, force_log=False):
         model.eval()

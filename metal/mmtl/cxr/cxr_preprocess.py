@@ -87,6 +87,5 @@ def get_task_config(dataset_name, split, subsample, finding, transform_kwargs):
             "subsample": subsample,
             "finding": finding,
             "label_type": int,
-            "get_uid": False,
         }
 
