@@ -126,6 +126,7 @@ class CXR8Dataset(Dataset):
             ys = {
                 task_name: label_set[idx] for task_name, label_set in self.labels.items() 
             }
+        uid = self.df.index[idx]
 
         if self.get_uid:
             return x, ys, uid
@@ -185,16 +186,28 @@ class CXR8Dataset(Dataset):
         """
         Y_lists = {task_name: [] for task_name in self.labels}
         X_list = []
+        uid_list = []
         for instance in batch_list:
-            x, ys = instance
+            if self.get_uid:
+                x, ys, uid = instance
+            else:
+                x, ys= instance
+
             image = x
             for task_name, y in ys.items():
                 Y_lists[task_name].append(y)
             X_list.append(x)
+            
+            if self.get_uid:
+                uid_list.append(uid)
         
         Xs = torch.stack(X_list)
         Ys = self._collate_labels(Y_lists)
-        return Xs, Ys
+        if self.get_uid:
+            uids = uid_list
+            return Xs, Ys, uids
+        else:
+            return Xs, Ys
 
     def _collate_labels(self, Ys): 
         """Collate potentially multiple label_sets 

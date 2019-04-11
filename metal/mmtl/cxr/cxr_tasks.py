@@ -460,7 +460,7 @@ def create_cxr_datasets(
     finding='ALL',
     subsample=-1,
     verbose=True,
-    dataset_kwargs = {}
+    dataset_kwargs = {},
     get_uid = False
 ):
     if verbose:
@@ -482,6 +482,7 @@ def create_cxr_datasets(
             split,
             subsample=subsample,
             finding=finding,
+            get_uid = get_uid,
             **dataset_kwargs
         )
     return datasets
