@@ -392,7 +392,7 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
                 if slice_names:
                     dataset = payload.data_loader.dataset
                     for slice_name in slice_names:
-                        slice_task_name = f"{task_name}:{slice_name}"
+                        slice_task_name = f"{task_name}_slice:{slice_name}"
                         slice_task = create_slice_task(task, slice_task_name)
                         tasks.append(slice_task)
 
