@@ -104,6 +104,7 @@ task_defaults = {
     "auxiliary_loss_multiplier": 1.0,
     "tasks": None,  # Comma-sep task list e.g. QNLI,QQP
     # Slicing
+    "use_slices": True,
     "slice_dict": {  # A map of the slices that apply to each task
         "CXR8-DRAIN_PNEUMOTHORAX": ["chest_drain_cnn_neg"]
     },  
@@ -289,7 +290,7 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
                 else []
                     )
 
-            if slice_names:
+            if slice_names and config["use_slices"]:
                 dataset = payload.data_loader.dataset
                 for slice_name in slice_names:
                     slice_task_name = f"{task_name}:{slice_name}"
