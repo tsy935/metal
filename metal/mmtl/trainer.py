@@ -5,6 +5,7 @@ import warnings
 from collections import defaultdict
 from pprint import pprint
 from shutil import copy2
+import pickle
 
 import dill
 import numpy as np
@@ -43,7 +44,7 @@ trainer_defaults = {
     "commit_hash": None,
     "ami": None,  # ami id for aws
     # Display
-    "progress_bar": False,
+    "progress_bar": True,
     # Dataloader
     # TODO: Restore the option for them to pass in raw simple data which we wrap up
     # "data_loader_config": {"batch_size": 32, "num_workers": 1, "shuffle": True},
@@ -72,9 +73,9 @@ trainer_defaults = {
     "lr_scheduler_config": {
         # Linearly increase lr up to "lr" over this many warmup_units
         "warmup_steps": 0.0,
-        "warmup_unit": "batches",  # ["epochs", "batches"]
+        "warmup_unit": "epochs",  # ["epochs", "batches"]
         # The minimum lr that will ever be used after warmup.
-        "min_lr": 0.0,
+        "min_lr": 1e-6,
         # Scheduler - exponential
         "exponential_config": {"gamma": 0.999},  # decay rate
         # Scheduler - reduce_on_plateau
@@ -87,14 +88,14 @@ trainer_defaults = {
         "task_metrics": [],
         # A list of functions that operate on a metrics_dict and return a dict with
         # additional metrics (e.g., aggregated metrics)
-        "aggregate_metric_fns": [],
+        "aggregate_metric_fns": ["model/valid/loss"],
         # Run scorers over a maximum of this many examples if > 0.
         "max_valid_examples": 0,
         # The name of the split to run scoring on during training
         # To score over multiple splits, set valid_split=None and use task_metrics
         "valid_split": "valid",
         # The name of the split to run final evaluation on after training
-        "test_split": None,  # If None, calculate final metrics over all splits
+        "test_split": "test",  # If None, calculate final metrics over all non-train splits
         # If non-None, only calculate and report these metrics every `score_every`
         # units (this can include the names of built-in and user-defined metrics);
         # otherwise, include all metrics returned by task Scorers.
@@ -108,7 +109,7 @@ trainer_defaults = {
     "logger_config": {
         "log_unit": "epochs",  # ['seconds', 'examples', 'batches', 'epochs']
         # Report loss every this many log_units
-        "log_every": 1.0,
+        "log_every": 0.2,
         # Calculate and report metrics every this many log_units:
         #   -1: default to log_every
         #   0: do not calculate or log metrics
@@ -136,14 +137,14 @@ trainer_defaults = {
     "checkpoint_cleanup": True,
     "checkpoint_config": {
         # TODO: unify checkpoint=['every', 'best', 'final']; specify one strategy
-        "checkpoint_every": 0,  # Save a model checkpoint every this many log_units
+        "checkpoint_every": 0.25,  # Save a model checkpoint every this many log_units
         # If checkpoint_best, also save the "best" model according to some metric
         # The "best" model will have the ['max', 'min'] value of checkpoint_metric
         # This metric must be produced by one of the task Scorer objects so it will be
         # available for lookup; assumes valid split unless appended with "train/"
-        "checkpoint_best": False,
+        "checkpoint_best": True,
         # "checkpoint_final": False,  # Save a model checkpoint at the end of training
-        "checkpoint_metric": "model/train/all/loss",
+        "checkpoint_metric": "model/valid/loss",
         "checkpoint_metric_mode": "min",
         # If None, checkpoint_dir defaults to the log_dir/run_dir/run_name/checkpoints
         # Note that using this default path is strongly recommended.
@@ -200,7 +201,7 @@ class MultitaskTrainer(object):
         self._set_lr_scheduler(model)  # TODO: Support more detailed training schedules
         self._set_task_scheduler(model, payloads)
 
-        # Record config
+        # Record config 
         if self.writer:
             self.writer.write_config(self.config)
 
@@ -765,8 +766,17 @@ class MultitaskTrainer(object):
                 checkpoint_config = self.config["checkpoint_config"]
                 metric_name = checkpoint_config["checkpoint_metric"]
                 score = self.metrics_hist.get(metric_name, None)
-                if score is not None:
+                # HACK: We enforce min_lr right now by just overwriting
+                min_lr = lr_scheduler_config["min_lr"]
+                if min_lr and optimizer_to_use.param_groups[0]["lr"] < min_lr:
+                    optimizer_to_use.param_groups[0]["lr"] = min_lr
+                # Only updating every epoch!
+                if score is not None and not (step % (self.batches_per_epoch-1)):
+                    lr = optimizer_to_use.param_groups[0]["lr"]
                     self.lr_scheduler.step(score)
+                    lr_new = optimizer_to_use.param_groups[0]["lr"]
+                    if lr != lr_new:
+                        print(f'Updated lr from {lr} to {lr_new}')
             # Iteration-based scheduler(s)
             else:
                 self.lr_scheduler.step()
