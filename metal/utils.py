@@ -1,6 +1,7 @@
 import argparse
 import copy
 import random
+import warnings
 from collections import defaultdict
 
 import numpy as np
@@ -53,7 +54,8 @@ def pred_to_prob(Y_h, k):
             label for item i and label j
     """
     Y_h = Y_h.clone()
-    Y_h = Y_h.squeeze()
+    if Y_h.dim() > 1:
+        Y_h = Y_h.squeeze()
     assert Y_h.dim() == 1
     assert (Y_h >= 1).all()
     assert (Y_h <= k).all()
@@ -268,7 +270,7 @@ def add_flags_from_config(parser, config_dict):
         if string == "0" or string.lower() == "false":
             return False
         elif string == "1" or string.lower() == "true":
-            return False
+            return True
         else:
             raise Exception(f"Invalid value {string} for boolean flag")
 
@@ -276,7 +278,6 @@ def add_flags_from_config(parser, config_dict):
         # Blacklist certain config parameters from being added as flags
         if param in ["verbose"]:
             continue
-
         default = config_dict[param]
         try:
             if isinstance(default, dict):
@@ -418,54 +419,56 @@ def split_data(
             return outputs
 
 
-def padded_tensor(items, pad_idx=0, left_padded=False, max_len=None, dtype=torch.long):
-    """Create a right-padded matrix from an uneven iterable of iterables.
+def padded_tensor(items, pad_idx=0, left_padded=False, max_len=None):
+    """Create a padded [n, ?] Tensor from a potentially uneven iterable of Tensors.
     Modified from github.com/facebookresearch/ParlAI
 
-    Returns (padded, lengths), where padded is the padded matrix, and lengths
-    is a list containing the lengths of each row.
+    Args:
+        items: (list) the items to merge and pad
+        pad_idx: (int) the value to use for padding
+        left_padded: (bool) if True, pad on the left instead of the right
+        max_len: (int) if not None, the maximum allowable item length
 
-    Matrix is right-padded (filled to the right) by default, but can be
-    left padded if the flag is set to True.
-
-    Matrix can also be placed on cuda automatically.
-
-    :param list[iter[int]] items: List of items
-    :param bool sort: If True, orders by the length
-    :param int pad_idx: the value to use for padding
-    :param bool left_padded:
-    :param int max_len: if None, the max length is the maximum item length
-
-    :returns: (padded, lengths) tuple
-    :rtype: (Tensor[int64], list[int])
+    Returns:
+        padded_tensor: (Tensor) the merged and padded tensor of items
     """
     # number of items
     n = len(items)
     # length of each item
     lens = [len(item) for item in items]
-    # max in time dimension
-    t = max(lens) if max_len is None else max_len
+    # max seq_len dimension
+    max_seq_len = max(lens) if max_len is None else max_len
 
-    # if input tensors are empty, we should expand to nulls
-    t = max(t, 1)
-
-    output = torch.full((n, t), pad_idx, dtype=dtype)
+    output = items[0].new_full((n, max_seq_len), pad_idx)
 
     for i, (item, length) in enumerate(zip(items, lens)):
-        if length == 0:
-            # skip empty items
-            continue
-        if not isinstance(item, torch.Tensor):
-            # put non-tensors into a tensor
-            item = torch.Tensor(item)
         if left_padded:
             # place at end
-            output[i, t - length :] = item
+            output[i, max_seq_len - length :] = item
         else:
             # place at beginning
             output[i, :length] = item
 
-    return output, lens
+    return output
+
+
+global warnings_given
+warnings_given = set([])
+
+
+def warn_once(self, msg, msg_name=None):
+    """Prints a warning statement just once
+
+    Args:
+        msg: The warning message
+        msg_name: [optional] The name of the warning. If None, the msg_name
+            will be the msg itself.
+    """
+    assert isinstance(msg, str)
+    msg_name = msg_name if msg_name else msg
+    if msg_name not in warnings_given:
+        warnings.warn(msg)
+    warnings_given.add(msg_name)
 
 
 # DEPRECATION: This is replaced by move_to_device

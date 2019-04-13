@@ -1,6 +1,7 @@
 import warnings
 
 import spacy
+import torch
 
 question_words = set(["who", "what", "where", "when", "why", "how"])
 nlp = spacy.load("en_core_web_sm")
@@ -69,7 +70,7 @@ def is_statement_has_question(dataset, idx):
 
 def ends_with_question_mark(dataset, idx):
     """Returns True if last token is '?" symbol"""
-    bert_ints = dataset.bert_tokens[idx]
+    bert_ints = dataset.bert_tokens[idx].tolist()
     bert_tokens = dataset.bert_tokenizer.convert_ids_to_tokens(bert_ints)
 
     # last token is '[SEP]'
@@ -79,7 +80,7 @@ def ends_with_question_mark(dataset, idx):
 
 def dash_semicolon(dataset, idx):
     """Returns True if there is a dash or semicolon in sentence1"""
-    bert_ints = dataset.bert_tokens[idx]
+    bert_ints = dataset.bert_tokens[idx].tolist()
     bert_tokens = dataset.bert_tokenizer.convert_ids_to_tokens(bert_ints)
     return "-" in bert_tokens or ";" in bert_tokens
 
@@ -99,16 +100,20 @@ def dash_semicolon(dataset, idx):
 
 def create_slice_labels(dataset, base_task_name, slice_name, verbose=False):
     """Returns a label set masked to include only those labels in the specified slice"""
-    # TODO: break this out into more modular pieces one we have multiple slices
+    # TODO: break this out into more modular pieces oncee we have multiple slices
     slice_fn = globals()[slice_name]
-    slice_indicators = [slice_fn(dataset, idx) for idx in range(len(dataset))]
-    base_labels = dataset.labels[base_task_name]
-    slice_labels = [
-        label * indicator for label, indicator in zip(base_labels, slice_indicators)
-    ]
-    if verbose:
-        print(f"Found {sum(slice_indicators)} examples in slice {slice_name}.")
-        if not any(slice_labels):
-            warnings.warn("No examples were found to belong to ")
+    slice_indicators = torch.tensor(
+        [slice_fn(dataset, idx) for idx in range(len(dataset))], dtype=torch.uint8
+    ).view(-1, 1)
 
-    return slice_labels
+    Y_base = dataset.labels[f"{base_task_name}_gold"]
+    Y_slice = Y_base.clone().masked_fill_(slice_indicators == 0, 0)
+
+    if verbose:
+        if not any(Y_slice):
+            warnings.warn(f"No examples were found to belong to slice {slice_name}")
+        else:
+            print(f"Found {sum(slice_indicators)} examples in slice {slice_name}.")
+
+    # NOTE: we assume here that all slice labels are for sentence-level tasks only
+    return Y_slice

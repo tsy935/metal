@@ -11,7 +11,8 @@ from time import strftime
 
 import numpy as np
 
-from metal.mmtl.glue.glue_tasks import create_tasks_and_payloads, task_defaults
+from metal.mmtl.glue.glue_metrics import glue_score
+from metal.mmtl.glue.glue_tasks import create_glue_tasks_payloads, task_defaults
 from metal.mmtl.metal_model import MetalModel, model_defaults
 from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
 from metal.utils import add_flags_from_config, recursive_merge_dicts
@@ -103,7 +104,7 @@ if __name__ == "__main__":
     task_names = [task_name for task_name in args.tasks.split(",")]
 
     # Getting tasks
-    tasks, payloads = create_tasks_and_payloads(task_names, **task_config)
+    tasks, payloads = create_glue_tasks_payloads(task_names, **task_config)
 
     model_config["verbose"] = False
     model = MetalModel(tasks, **model_config)
@@ -134,5 +135,4 @@ if __name__ == "__main__":
     # trainer_config will get written automatically right before training
     trainer.writer.write_config(model_config, "model_config")
     trainer.writer.write_config(task_config, "task_config")
-
-    trainer.train_model(model, payloads)
+    trainer.train_model(model, payloads, aggregate_metric_fns=[glue_score])
