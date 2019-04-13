@@ -41,6 +41,7 @@ class MetalModel(nn.Module):
 
         # Load weights
         if self.config["model_weights"]:
+            print("Loading model weights...")
             self.load_weights(self.config["model_weights"])
 
         # Half precision

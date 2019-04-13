@@ -104,7 +104,10 @@ task_defaults = {
     "auxiliary_loss_multiplier": 1.0,
     "tasks": None,  # Comma-sep task list e.g. QNLI,QQP
     # Slicing
-    "slice_dict": None,  # A map of the slices that apply to each task
+    "use_slices": True,
+    "slice_dict": {  # A map of the slices that apply to each task
+        "CXR8-DRAIN_PNEUMOTHORAX": ["chest_drain_cnn_neg"]
+    },  
 }
 
 
@@ -134,8 +137,8 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
     # Get payload:primary task dict
     task_payload_dict = defaultdict(list)
     for full_task_name in full_task_names:
-        payload_name = full_task_name.split(":")[0]
-        task_name = full_task_name.split(":")[1]
+        payload_name = full_task_name.split("_")[0]
+        task_name = full_task_name.split("_")[1]
         task_payload_dict[payload_name].append(task_name)
 
     # If "ALL" supplied as task, only one payload per dataset;
@@ -146,9 +149,9 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
              if len(v)>1:
                  raise ValueError("Cannot have 'ALL' task with other primary tasks")
              else:
-                 full_task_names.remove(f'{k}:ALL')
+                 full_task_names.remove(f'{k}_ALL')
                  full_task_names = full_task_names + [
-                     f'{k}:{t}' for t in MASTER_PAYLOAD_TASK_DICT[k]
+                     f'{k}_{t}' for t in MASTER_PAYLOAD_TASK_DICT[k]
                      ]
     # Getting auxiliary task dict
     auxiliary_task_dict = config["auxiliary_task_dict"]
@@ -163,24 +166,24 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
         # Right now, supply tasks as DATASET:TASK, by default if all tasks
         # in a dataset are included, it is the same as training on entire dataset
         if config["pool_payload_tasks"]:
-            payload_name = full_task_name.split(":")[0]
+            payload_name = full_task_name.split("_")[0]
             dataset_name = payload_name
-            task_name = full_task_name.split(":")[1]
+            task_name = full_task_name.split("_")[1]
             payload_finding = task_name
             if task_name not in auxiliary_task_dict.keys():
                 new_payload = f"{payload_name}_train" not in [p.name for p in payloads]
             else: 
                 new_payload = False
         else:
-            dataset_name = full_task_name.split(":")[0]
+            dataset_name = full_task_name.split("_")[0]
             if 'ALL' in task_payload_dict[dataset_name]:
                 payload_name = dataset_name
                 payload_finding = 'ALL'
             else:
                 payload_name = full_task_name
-                payload_finding = full_task_name.split(":")[1] 
+                payload_finding = full_task_name.split("_")[1] 
             task_name = full_task_name
-            if task_name.split(":")[1] not in auxiliary_task_dict.keys():
+            if task_name.split("_")[1] not in auxiliary_task_dict.keys():
                 new_payload = f"{payload_name}_train" not in [p.name for p in payloads]
             else:
                 new_payload = False
@@ -227,22 +230,7 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
         # TODO: Convolutional decoder module
         elif "AUTOENCODE" in task_name:
             pass
-            #scorer = Scorer(
-            #standard_metrics=["accuracy"],
-            #)
-            #task = RegressionTask(
-            #    name=task_name,
-            #    input_module=input_module,
-            #    middle_module=middle_module,
-            #    attention_module=get_attention_module(config, neck_dim),
-            #    head_module=DecoderHead(neck_dim),
-            #    scorer=scorer,
-            #    loss_hat_func=(
-            #        lambda out, Y_gold: F.mse_loss(torch.sigmoid(out), Y_gold)
-            #    ),
-            #   scorer=Scorer(custom_metric_funcs={mse: ["mse"]}),
-            #    loss_multiplier=config["auxiliary_loss_multiplier"],
-            #)
+        
         else:
             scorer = Scorer(
                 standard_metrics=["f1", "roc-auc"],
@@ -270,9 +258,11 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
         tasks.append(task)
 
         # Create payloads (and add slices/auxiliary tasks as applicable)
-        for split, data_loader in data_loaders.items():
+        for split in config["splits"]:
             payload_name_split = f"{payload_name}_{split}"
             if new_payload:
+                data_loader = data_loaders[split]
+                payload_name_split = f"{payload_name}_{split}"
                 payload = Payload(payload_name_split, data_loader, [task_name], split)
                 # Add auxiliary label sets if applicable
                 #CXR: NOT TESTED
@@ -286,8 +276,11 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
             else:
                 # If payload exists, get it
                 payload_names = [p.name for p in payloads]
-                payload = payloads[payload_names.index(payload_name_split)]
+                payload = payloads[payload_names.index(payload_name_split)] 
+           
+                # Add task name to payload -- assumes label set already there
                 payload.task_names.append(task_name)
+                assert(task_name in payload.data_loader.dataset.labels.keys())
 
             # Add slice task and label sets if applicable
             # CXR: not tested
@@ -295,9 +288,9 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
                 config["slice_dict"].get(task_name, [])
                 if config["slice_dict"]
                 else []
-                )
+                    )
 
-            if slice_names:
+            if slice_names and config["use_slices"]:
                 dataset = payload.data_loader.dataset
                 for slice_name in slice_names:
                     slice_task_name = f"{task_name}:{slice_name}"

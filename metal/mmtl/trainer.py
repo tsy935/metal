@@ -146,7 +146,7 @@ trainer_defaults = {
         # The "best" model will have the ['max', 'min'] value of checkpoint_metric
         # This metric must be produced by one of the task Scorer objects so it will be
         # available for lookup; assumes valid split unless appended with "train/"
-        "checkpoint_best": False,
+        "checkpoint_best": True,
         # "checkpoint_final": False,  # Save a model checkpoint at the end of training
         "checkpoint_metric": "model/valid/loss",
         "checkpoint_metric_mode": "min",
@@ -215,7 +215,7 @@ class MultitaskTrainer(object):
         self._set_lr_scheduler(model)  # TODO: Support more detailed training schedules
         self._set_task_scheduler(model, payloads)
 
-        # Record config
+        # Record config 
         if self.writer:
             self.writer.write_config(self.config)
 

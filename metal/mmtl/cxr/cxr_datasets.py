@@ -39,6 +39,7 @@ class CXR8Dataset(Dataset):
         self.transform = transform
         self.path_to_images = path_to_images
         self.path_to_labels = path_to_labels
+        self.split = split
         self.df = pd.read_csv(self.path_to_labels, sep='\t')
         self.df.columns = map(str.upper, self.df.columns)
         self.get_uid = get_uid
@@ -105,7 +106,7 @@ class CXR8Dataset(Dataset):
             if self.pooled:
                 self.labels[cls.upper()] = np.array(label_vec).astype(int) 
             else:
-                self.labels[f"{self.dataset_name}:{cls.upper()}"] = np.array(label_vec).astype(int)
+                self.labels[f"{self.dataset_name}_{cls.upper()}"] = np.array(label_vec).astype(int)
 
 
     def __getitem__(self, idx):
@@ -120,7 +121,7 @@ class CXR8Dataset(Dataset):
 
         # If statement to train classifiers for single tasks outside mmtl
         if self.single_task is not None:
-            ky = f"{self.dataset_name}:{self.single_task.upper()}" if not self.pooled else self.single_task.upper()
+            ky = f"{self.dataset_name}_{self.single_task.upper()}" if not self.pooled else self.single_task.upper()
             ys = self.labels[ky][idx]
         else:
             ys = {
@@ -275,10 +276,10 @@ def get_cxr_dataset(dataset_name, split, subsample=None, finding="ALL", pooled=F
     """ Create and returns specified cxr dataset based on image path.""" 
  
     # MODIFY THIS TO GET THE RIGHT LOCATIONS FOR EACH!!
-    if ":" in dataset_name:
-        dataset_name = dataset_name.split(':')[0]
-    if ":" in finding:
-        finding = finding.split(':')[1] 
+    if "_" in dataset_name:
+        dataset_name = dataset_name.split('_')[0]
+    if "_" in finding:
+        finding = finding.split('_')[1] 
     transform_kwargs = kwargs['transform_kwargs']
     config = get_task_config(dataset_name, split, subsample, finding, transform_kwargs) 
     config["get_uid"] = kwargs.get("get_uid", False)
