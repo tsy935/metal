@@ -49,13 +49,13 @@ class Payload(object):
             )
         elif label_list is not None:
             assert label_fn is None
-#            assert isinstance(label_list, torch.Tensor)
+            assert isinstance(label_list, torch.Tensor)
             new_labels = label_list
         else:
             raise ValueError("Incorrect label object type -- supply list or function")
 
-#        if new_labels.dim() < 2:
-#            raise Exception("New label_set must have at least two dimensions: [n, ?]")
+        if new_labels.dim() < 2:
+            raise Exception("New label_set must have at least two dimensions: [n, ?]")
 
         self.data_loader.dataset.labels[task_name] = new_labels
         self.labels_to_tasks[label_name] = task_name
