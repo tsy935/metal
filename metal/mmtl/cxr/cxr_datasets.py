@@ -117,7 +117,7 @@ class CXR8Dataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        x = image
+        x = {"data": image}
 
         # If statement to train classifiers for single tasks outside mmtl
         if self.single_task is not None:
@@ -194,15 +194,16 @@ class CXR8Dataset(Dataset):
             else:
                 x, ys= instance
 
-            image = x
+           
+            image = x["data"]
             for task_name, y in ys.items():
                 Y_lists[task_name].append(y)
-            X_list.append(x)
+            X_list.append(image)
             
             if self.get_uid:
                 uid_list.append(uid)
         
-        Xs = torch.stack(X_list)
+        Xs = {"data": torch.stack(X_list)}
         Ys = self._collate_labels(Y_lists)
         if self.get_uid:
             uids = uid_list
