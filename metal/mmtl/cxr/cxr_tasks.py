@@ -76,7 +76,7 @@ task_defaults = {
     "finding":"ALL",
     "seed": None,
     "dl_kwargs": {
-        "num_workers": 8,
+        "num_workers": 0,
         "batch_size": 16,
         "shuffle": True,  # Used only when split_prop is None; otherwise, use Sampler
     },
@@ -300,7 +300,13 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
                     slice_labels = create_slice_labels(
                         dataset, base_task_name=task_name, slice_name=slice_name
                         )
-                    payload.add_label_set(slice_task_name, slice_labels)
+                    slice_labels = torch.Tensor(slice_labels)
+                    if slice_labels.dim()<2:
+                        slice_labels = slice_labels[:,None]
+
+                    labelset_slice_name=f"{task_name}:{slice_name}"
+                    payload.add_label_set(slice_task_name, labelset_slice_name, 
+                        label_list = slice_labels)
 
     return tasks, payloads
 

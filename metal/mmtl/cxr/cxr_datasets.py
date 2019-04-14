@@ -211,6 +211,45 @@ class CXR8Dataset(Dataset):
         else:
             return Xs, Ys
 
+    def _collate_labels_slc(self, Ys):
+        """Collate potentially multiple label_sets
+
+        Args:
+            Ys: a dict of the form {task_name: label_list}, where label_list is a
+                list of individual labels (ints, floats, numpy, or torch) belonging to
+                the same label_set; labels may be a scalar or a sequence.
+        Returns:
+            Ys: a dict of the form {task_name: labels}, with labels containing a torch
+                Tensor (padded if necessary) of labels belonging to the same label_set
+
+        Convert each Y in Ys from:
+            list of scalars (instance labels) -> [n,] tensor
+            list of tensors/lists/arrays (token labels) -> [n, seq_len] padded tensor
+        """
+        for label_name, Y in Ys.items():
+            if isinstance(Y[0], int):
+                Y = torch.tensor(Y, dtype=torch.long)
+            elif isinstance(Y[0], float):
+                Y = torch.tensor(Y, dtype=torch.float)
+            elif isinstance(Y[0], np.integer):
+                Y = torch.from_numpy(np.array(Y))
+            elif isinstance(Y[0], np.float):
+                Y = torch.from_numpy(np.array(Y))
+            elif (
+                isinstance(Y[0], list)
+                or isinstance(Y[0], np.ndarray)
+                or isinstance(Y[0], torch.Tensor)
+            ):
+                Y = padded_tensor(Y)
+            else:
+                msg = f"Unrecognized dtype of label_set {label_name}: " f"{type(Y[0])}"
+                raise Exception(msg)
+            # Ensure that first dimension of Y is n
+            if Y.dim() == 1:
+                Y = Y.view(-1, 1)
+            Ys[label_name] = Y
+        return Ys
+
     def _collate_labels(self, Ys): 
         """Collate potentially multiple label_sets 
  
@@ -227,8 +266,8 @@ class CXR8Dataset(Dataset):
             list of scalars (instance labels) -> [n,] tensor 
             list of tensors/lists/arrays (token labels) -> [n, seq_len] padded tensor 
         """
-        for task_name, Y in Ys.items(): 
-            if isinstance(Y[0], int): 
+        for task_name, Y in Ys.items():
+            if isinstance(Y[0], (int, np.int64)): 
                 Y = torch.tensor(Y, dtype=torch.long)
             elif isinstance(Y[0], torch.Tensor) and len(Y[0].size())==0:
                 Y = torch.tensor(Y, dtype=torch.float) 
@@ -238,6 +277,8 @@ class CXR8Dataset(Dataset):
                 Y = torch.tensor(Y, dtype=torch.float) 
             elif isinstance(Y[0], np.float): 
                 Y = torch.from_numpy(Y) 
+            elif isinstance(Y[0], torch.FloatTensor):
+                Y = torch.tensor(Y, dtype=torch.long)
             elif ( 
                 isinstance(Y[0], list) 
                 or isinstance(Y[0], np.ndarray) 
