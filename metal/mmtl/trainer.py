@@ -140,7 +140,7 @@ trainer_defaults = {
     "checkpoint_cleanup": True,
     "checkpoint_config": {
         # TODO: unify checkpoint=['every', 'best', 'final']; specify one strategy
-        "checkpoint_every": 0.25,  # Save a model checkpoint every this many log_units
+        "checkpoint_every": 1.0,  # Save a model checkpoint every this many log_units
         # If checkpoint_best, also save the "best" model according to some metric
         # The "best" model will have the ['max', 'min'] value of checkpoint_metric
         # This metric must be produced by one of the task Scorer objects so it will be
