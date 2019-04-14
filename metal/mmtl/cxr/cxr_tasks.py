@@ -76,7 +76,7 @@ task_defaults = {
     "finding":"ALL",
     "seed": None,
     "dl_kwargs": {
-        "num_workers": 8,
+        "num_workers": 4,
         "batch_size": 16,
         "shuffle": True,  # Used only when split_prop is None; otherwise, use Sampler
     },
