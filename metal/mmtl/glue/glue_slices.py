@@ -7,6 +7,12 @@ question_words = set(["who", "what", "where", "when", "why", "how"])
 nlp = spacy.load("en_core_web_sm")
 
 
+def BASE(dataset, idx):
+    # Always returns True -- used to train a copy fo the base_labelset
+    # NOTE/HACK: MUST be named "BASE" to match task definition
+    return True
+
+
 def more_people(dataset, idx):
     people = 0
     sentence = dataset.sentences[idx][0].split()

@@ -374,12 +374,11 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
             config["slice_dict"].get(task_name, []) if config["slice_dict"] else []
         )
 
-        if slice_names:
-            # Add a task for each slice
-            for slice_name in slice_names:
-                slice_task_name = f"{task_name}_slice:{slice_name}"
-                slice_task = create_slice_task(task, slice_task_name)
-                tasks.append(slice_task)
+        # Add a task for each slice
+        for slice_name in slice_names:
+            slice_task_name = f"{task_name}_slice:{slice_name}"
+            slice_task = create_slice_task(task, slice_task_name)
+            tasks.append(slice_task)
 
         if has_payload and not skip_payloads:
             # Create payloads (and add slices/auxiliary tasks as applicable)
@@ -395,17 +394,17 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
                         aux_task_func = auxiliary_task_functions[aux_task_name]
                         payload = aux_task_func(payload)
 
-                if slice_names:
-                    # Add a labelset slice to each split
-                    dataset = payload.data_loader.dataset
-                    for slice_name in slice_names:
-                        slice_labels = create_slice_labels(
-                            dataset, base_task_name=task_name, slice_name=slice_name
-                        )
-                        labelset_slice_name = f"{task_name}_slice:{slice_name}"
-                        payload.add_label_set(
-                            slice_task_name, labelset_slice_name, slice_labels
-                        )
+                # Add a labelset slice to each split
+                dataset = payload.data_loader.dataset
+                for slice_name in slice_names:
+                    slice_task_name = f"{task_name}_slice:{slice_name}"
+                    slice_labels = create_slice_labels(
+                        dataset, base_task_name=task_name, slice_name=slice_name
+                    )
+                    labelset_slice_name = f"{task_name}_slice:{slice_name}"
+                    payload.add_label_set(
+                        slice_task_name, labelset_slice_name, slice_labels
+                    )
 
                 payloads.append(payload)
 
