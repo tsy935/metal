@@ -3,6 +3,7 @@ from torch.nn import functional as F
 
 from metal.end_model import IdentityModule
 from metal.mmtl.metal_model import MetalModel
+from metal.mmtl.modules import unwrap_module
 from metal.utils import move_to_device, recursive_merge_dicts, set_seed
 
 
@@ -32,16 +33,18 @@ def validate_slice_tasks(tasks):
             (t.middle_module is None and base_task.middle_module is None)
             or t.middle_module is base_task.middle_module
             or (
-                isinstance(t.middle_module.module, IdentityModule)
-                and isinstance(base_task.middle_module.module, IdentityModule)
+                isinstance(unwrap_module(t.middle_module.module), IdentityModule)
+                and isinstance(unwrap_module(base_task.middle_module), IdentityModule)
             )
         )
         same_attention = (
             (t.attention_module is None and base_task.attention_module is None)
             or t.attention_module is base_task.attention_module
             or (
-                isinstance(t.attention_module.module, IdentityModule)
-                and isinstance(base_task.attention_module.module, IdentityModule)
+                isinstance(unwrap_module(t.attention_module.module), IdentityModule)
+                and isinstance(
+                    unwrap_module(base_task.attention_module), IdentityModule
+                )
             )
         )
 

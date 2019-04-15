@@ -1,6 +1,13 @@
 import torch.nn as nn
 
 
+def unwrap_module(module):
+    if isinstance(module, MetalModuleWrapper):
+        return module.module
+    else:
+        return module
+
+
 class MetalModule(nn.Module):
     """An abstract class of a module that accepts and returns a dict"""
 
