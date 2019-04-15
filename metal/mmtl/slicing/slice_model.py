@@ -6,6 +6,7 @@ from metal.utils import move_to_device, recursive_merge_dicts, set_seed
 
 
 def validate_slice_tasks(tasks):
+    # validate slice head cardinality
     for t in tasks:
         if t.head_module.module.out_features != 1:
             raise ValueError(
@@ -17,10 +18,12 @@ def validate_slice_tasks(tasks):
     base_tasks = [t for t in tasks if not t.is_slice]
     slice_tasks = [t for t in tasks if t.is_slice]
 
+    # validate base task
     if len(base_tasks) != 1:
         raise ValueError(f"SliceModel only supports 1 base task.")
     base_task = base_tasks[0]
 
+    # validate shared body representations
     for t in slice_tasks:
         has_same_body = (
             t.input_module is base_task.input_module
@@ -40,6 +43,13 @@ def validate_slice_tasks(tasks):
 
 
 class SliceModel(MetalModel):
+    """ Slice-aware version of MetalModel.
+
+    At the moment, only supports:
+        * Binary classification heads (with output_dim=1, breaking Metal convention)
+        * A single base task + an arbitrary number of slice tasks (is_slice=True)
+    """
+
     def __init__(self, tasks, **kwargs):
         validate_slice_tasks(tasks)
 
@@ -47,7 +57,9 @@ class SliceModel(MetalModel):
         self.base_task = [t for t in self.task_map.values() if not t.is_slice][0]
         self.slice_tasks = {name: t for name, t in self.task_map.items() if t.is_slice}
 
-        # TODO: more rigorously weight the slice tasks
+        # At the moment, we assign the slice weights = 1/num_slices
+        # The base_task maintains its default multiplier = 1.0
+        # TODO: look into more rigorous way to do this
         slice_weight = 1.0 / len(self.slice_tasks) if self.slice_tasks else 1.0
         for t in self.slice_tasks.values():
             t.loss_multiplier = slice_weight
@@ -68,9 +80,15 @@ class SliceModel(MetalModel):
         return out
 
     def forward_heads(self, body, task_names):
+        """ Given body (everything before head) representation, return dict of
+        task_head outputs for specified task_names """
+
         return {t: self.head_modules[t].module(body) for t in task_names}
 
     def forward(self, X, task_names):
+        """ Perform forward pass with slice-reweighted base representation through
+        the base_task head. """
+
         slice_task_names = [
             slice_task_name for slice_task_name in self.slice_tasks.keys()
         ]
