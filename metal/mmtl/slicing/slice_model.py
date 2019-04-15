@@ -41,6 +41,13 @@ def validate_slice_tasks(tasks):
         if not has_same_body:
             raise ValueError("Slice tasks must have the same body as base task.")
 
+    # validate that one of the "slice_tasks" operates on the entire dataset
+    if not any([t.name.endswith(":BASE") for t in slice_tasks]):
+        raise ValueError(
+            "There must be a `slice_task` designated to operate "
+            f"on the entire labelset with name '{base_task.name}:BASE'."
+        )
+
 
 class SliceModel(MetalModel):
     """ Slice-aware version of MetalModel.
