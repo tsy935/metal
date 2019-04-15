@@ -318,6 +318,9 @@ class MetalModel(nn.Module):
         if target_tasks is None:
             target_tasks = set(payload.labels_to_tasks.values())
 
+        if target_labels is None:
+            target_labels = set(payload.labels_to_tasks.keys())
+
         Ys = defaultdict(list)
         Ys_probs = defaultdict(list)
 
@@ -379,7 +382,7 @@ class MetalModel(nn.Module):
         """
         self.eval()
         _, Ys_probs, Ys_preds = self.predict_with_gold(
-            payload, task_name, return_preds=True, **kwargs
+            payload, [task_name], return_preds=True, **kwargs
         )
         Y_probs = Ys_probs[task_name]
         Y_preds = Ys_preds[task_name]
