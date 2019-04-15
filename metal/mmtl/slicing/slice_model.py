@@ -1,6 +1,7 @@
 import torch
 from torch.nn import functional as F
 
+from metal.end_model import IdentityModule
 from metal.mmtl.metal_model import MetalModel
 from metal.utils import move_to_device, recursive_merge_dicts, set_seed
 
@@ -24,22 +25,35 @@ def validate_slice_tasks(tasks):
     base_task = base_tasks[0]
 
     # validate shared body representations
+    # TODO: clean up these checks
     for t in slice_tasks:
-        has_same_body = (
-            t.input_module is base_task.input_module
-            and (
-                t.middle_module is None
-                and base_task.middle_module is None
-                or t.middle_module is base_task.middle_module
-            )
-            and (
-                t.attention_module is None
-                and base_task.attention_module is None
-                or t.attention_module is base_task.attention_module
+        same_input = t.input_module is base_task.input_module
+        same_middle = (
+            (t.middle_module is None and base_task.middle_module is None)
+            or t.middle_module is base_task.middle_module
+            or (
+                isinstance(t.middle_module.module, IdentityModule)
+                and isinstance(base_task.middle_module.module, IdentityModule)
             )
         )
+        same_attention = (
+            (t.attention_module is None and base_task.attention_module is None)
+            or t.attention_module is base_task.attention_module
+            or (
+                isinstance(t.attention_module.module, IdentityModule)
+                and isinstance(base_task.attention_module.module, IdentityModule)
+            )
+        )
+
+        has_same_body = same_input and same_middle and same_attention
+
         if not has_same_body:
-            raise ValueError("Slice tasks must have the same body as base task.")
+            raise ValueError(
+                f"Slice tasks must have the same body as base task: "
+                f"(same_input={same_input}"
+                f", same_middle={same_middle}"
+                f", same_attention={same_attention})"
+            )
 
 
 class SliceModel(MetalModel):
