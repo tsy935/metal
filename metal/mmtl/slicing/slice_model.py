@@ -58,6 +58,13 @@ def validate_slice_tasks(tasks):
                 f", same_attention={same_attention})"
             )
 
+    # validate that one of the "slice_tasks" operates on the entire dataset
+    if not any([t.name.endswith(":BASE") for t in slice_tasks]):
+        raise ValueError(
+            "There must be a `slice_task` designated to operate "
+            f"on the entire labelset with name '{base_task.name}:BASE'."
+        )
+
 
 class SliceModel(MetalModel):
     """ Slice-aware version of MetalModel.

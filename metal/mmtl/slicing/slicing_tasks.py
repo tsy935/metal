@@ -108,12 +108,7 @@ class BinaryClassificationTask(ClassificationTask):
 
     def __repr__(self):
         """Overrides existing __repr__ function to include slice information."""
-
-        cls_name = type(self).__name__
-        slice_repr = ", is_slice" if self.is_slice else ""
-        repr = (
-            f"{cls_name}(name={self.name}"
-            f", loss_multiplier={self.loss_multiplier}"
-            f"{slice_repr})"  # show "is_slice" if applicable
-        )
-        return repr
+        metal_repr = str(super(BinaryClassificationTask, self).__repr__())
+        return (
+            f"{metal_repr[:-1]}, is_slice={self.is_slice})"
+        )  # trim closing paren in repr')'
