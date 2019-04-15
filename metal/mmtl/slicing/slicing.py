@@ -6,4 +6,5 @@ def create_slice_task(base_task, slice_task_name):
     slice_task = copy.copy(base_task)
     slice_task.name = slice_task_name
     slice_task.head_module = copy.deepcopy(base_task.head_module)
+    slice_task.is_slice = True
     return slice_task
