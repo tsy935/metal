@@ -14,7 +14,7 @@ from time import strftime
 
 import numpy as np
 
-from metal.mmtl.cxr.cxr_tasks import create_tasks_and_payloads, task_defaults
+from metal.mmtl.cxr.cxr_tasks import create_tasks_and_payloads, task_defaults, add_slice_labels
 from metal.mmtl.metal_model import MetalModel, model_defaults
 from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
 from metal.utils import add_flags_from_config, recursive_merge_dicts
@@ -175,6 +175,8 @@ if __name__ == "__main__":
         # Retargeting slices
         for tsk, slices in task_config['slice_dict'].items():
             for slc in slices:
+                if not task_config['use_slices']:
+                    add_slice_labels(main_payload,tsk,slc)
                 main_payload.retarget_labelset(f"{tsk}:{slc}", tsk)
         # Scoring model
         main_dict = model.score(main_payload)
