@@ -30,7 +30,7 @@ if __name__ == "__main__":
                    help='use metal label convention if true')
     parser.add_argument('--base_task', '-bt', type=str, required=True,
                    help='baseline task to use for slice')
-    parser.add_argument('--splits', '-s', type=str, required=True,
+    parser.add_argument('--splits', '-sp', type=str, required=True,
                    help='comma separated list')
     args = parser.parse_args()
 
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     # Wrap datasets with DataLoader objects
     data_loaders = create_cxr_dataloaders(
             datasets,
-            dl_kwargs={'num_workers':0, 'batch_size':16},
+            dl_kwargs={'num_workers':8, 'batch_size':16},
             split_prop=None,
             splits=splits,
             seed=123,
