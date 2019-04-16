@@ -24,7 +24,7 @@ def load_results_from_log(log_dir):
 def get_task_name(nm):
     return '_'.join(nm.split('_')[1:])
 
-def get_cxr14_rocs_from_log(chexnet_results, metrics_dict, col_name = 'experiment'):
+def get_cxr14_rocs_from_log(chexnet_results, metrics_dict, col_name = 'experiment', plot_metric='roc-auc'):
     output_dict = {}
     for ky, val in metrics_dict.items():
         # Current format: task, split, labelset, metric
@@ -35,7 +35,7 @@ def get_cxr14_rocs_from_log(chexnet_results, metrics_dict, col_name = 'experimen
         labelset_name = get_task_name(labelset)
         
         # Checking if this is a valid result for comparison
-        if (task_name == labelset_name) and (task_name.upper() in chexnet_results.index) and (metric == 'roc-auc'):
+        if (task_name == labelset_name) and (task_name.upper() in chexnet_results.index) and (metric == plot_metric):
             output_dict[task_name] = val
             
         # Adding to chexnet results
