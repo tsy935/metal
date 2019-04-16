@@ -177,19 +177,20 @@ if __name__ == "__main__":
             for slc in slices:
                 main_payload.retarget_labelset(f"{tsk}:{slc}", tsk)
         # Scoring model
-        slc_dict = model.score(slice_payload)
         main_dict = model.score(main_payload)
-        slc_dict = {k:v for k,v in slc_dict.items() if ":" in k}
         main_dict = {k:v for k,v in main_dict.items() if ":" in k}
         # Printing results
-        print("Evaluating slice performance on {split} split")
+        print(f"Evaluating slice performance on {split} split")
         print("Using main task heads:")
         print(main_dict)
-        print("Using slice task heads:")
-        print(slc_dict)
         # Storing results
         slice_output[split]["MAIN"]=main_dict
-        slice_output[split]["SLICE"]=slc_dict
+        if task_config['use_slices']:
+            slc_dict = model.score(slice_payload)
+            slc_dict = {k:v for k,v in slc_dict.items() if ":" in k}
+            print("Using slice task heads:")
+            print(slc_dict)
+            slice_output[split]["SLICE"]=slc_dict
 
     # Writing slice evaluation
     slice_metrics_path = os.path.join(trainer.writer.log_subdir, "slice_metrics.json")

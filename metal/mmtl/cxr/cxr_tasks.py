@@ -76,7 +76,7 @@ task_defaults = {
     "finding":"ALL",
     "seed": None,
     "dl_kwargs": {
-        "num_workers": 4,
+        "num_workers": 8,
         "batch_size": 16,
         "shuffle": True,  # Used only when split_prop is None; otherwise, use Sampler
     },
@@ -215,9 +215,10 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
 
         # TODO: PUT IN OPTION TO POOL SAME TASK FOR DIFF SETS HERE?
 
+        task_metrics = ["f1"]
         if "PNEUMOTHORAX" in task_name:
             scorer = Scorer(
-            standard_metrics=["f1","roc-auc"],
+            standard_metrics=task_metrics,
             )
             task = ClassificationTask(
                 name=task_name,
@@ -233,7 +234,7 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
         
         else:
             scorer = Scorer(
-                standard_metrics=["f1", "roc-auc"],
+                standard_metrics=task_metrics,
             )   
             task = ClassificationTask(
                 name=task_name,
