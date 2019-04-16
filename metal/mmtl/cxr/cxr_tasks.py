@@ -215,7 +215,7 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
 
         # TODO: PUT IN OPTION TO POOL SAME TASK FOR DIFF SETS HERE?
 
-        task_metrics = ["f1"]
+        task_metrics = ["f1", "roc-auc"]
         if "PNEUMOTHORAX" in task_name:
             scorer = Scorer(
             standard_metrics=task_metrics,
