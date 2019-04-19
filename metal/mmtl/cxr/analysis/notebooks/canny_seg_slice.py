@@ -16,8 +16,8 @@ def canny_edge_detection(x, kwargs):
     x = x+np.min(x)
     return cv2.Canny(x, **kwargs)
 
-def get_canny_edges(x):
-    proc_fun = partial(canny_edge_detection, kwargs={'threshold1':100, 'threshold2':150, 'apertureSize':3, 'L2gradient':True})
+def get_canny_edges(x, kwargs={'threshold1':100, 'threshold2':150, 'apertureSize':3, 'L2gradient':True}):
+    proc_fun = partial(canny_edge_detection, kwargs=kwargs)
 
     x_out = proc_fun(x*255)
     return x_out
@@ -29,7 +29,7 @@ def remove_small_regions(img, size):
     return img
 
 def get_lung_segmentation(x):
-    xx = (cv2.resize(x.numpy(), dsize=(256, 256))-mean[0])/std[0]
+    xx = (cv2.resize(np.array(x), dsize=(256, 256))-mean[0])/std[0]
     im_shape = xx.shape
     xx = xx[None,:,:,None]
 
@@ -46,8 +46,8 @@ def get_lung_segmentation(x):
     pr = remove_small_regions(pr, 0.02 * np.prod(im_shape))
     return pr, xx
 
-def get_canny_seg_diff_image(x):
-    edges = get_canny_edges(x).squeeze()
+def get_canny_seg_diff_image(x, kwargs):
+    edges = get_canny_edges(x, kwargs).squeeze()
     lungs, _ = get_lung_segmentation(x)
     
     # resizing to align with lung segmentation
@@ -56,4 +56,4 @@ def get_canny_seg_diff_image(x):
     # getting difference image
     diff_img = (lungs*255 - edges)*lungs
     
-    return diff_img
+    return diff_img, lungs, edges
