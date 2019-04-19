@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import torch
 from torch.nn import functional as F
 
@@ -109,6 +111,20 @@ class SliceModel(MetalModel):
 
         return {t: self.head_modules[t].module(body) for t in task_names}
 
+    def forward_attention_logits(self, slice_heads, slice_task_names):
+        """ Computes unnomralized slice_head attention weights """
+
+        # slice_preds is the [batch_size, num_slices] concatenated prediction for
+        # each slice head
+        slice_preds = torch.cat(
+            [slice_heads[slice_name]["data"] for slice_name in slice_task_names], dim=1
+        )
+
+        # A is the [batch_size, num_slices] unormalized Tensor representing the
+        # amount of attention to pay to each head (based on each one's confidence)
+        A_weights = abs(slice_preds)
+        return A_weights
+
     def forward(self, X, task_names):
         """ Perform forward pass with slice-reweighted base representation through
         the base_task head. """
@@ -125,11 +141,10 @@ class SliceModel(MetalModel):
         # body_rep is the representation that would normally go into the task_heads
         body_rep = body["data"]
 
-        # slice_preds is the [batch_size, num_slices] concatenated prediction for
-        # each slice head
-        slice_preds = torch.cat(
-            [slice_heads[slice_name]["data"] for slice_name in slice_task_names], dim=1
-        )
+        # [batch_size, num_slices] unnormalized attention weights.
+        # we then normalize the weights across all heads
+        A_weights = self.forward_attention_logits(slice_heads, slice_task_names)
+        A = F.softmax(A_weights, dim=1)
 
         # slice_weights is the [num_slices, body_dim] concatenated tensor
         # representing linear transforms for the body into the head values
@@ -142,10 +157,6 @@ class SliceModel(MetalModel):
             dim=0,
         )
 
-        # A is the [batch_size, num_slices] Tensor representing the amount of
-        # attention to pay to each head (based on each one's confidence)
-        A = F.softmax(abs(slice_preds), dim=1)
-
         # we reweight the linear mappings `slice_weights` by the
         # attention scores `A` and use this to reweight the base representation
         reweighted_rep = (A @ slice_weights) * body_rep
@@ -157,3 +168,39 @@ class SliceModel(MetalModel):
         output = self.forward_heads(body, [self.base_task.name])
         output.update(slice_heads)
         return output
+
+    @torch.no_grad()
+    def calculate_attention(self, X):
+        """ Retrieve the unnormalized attention weights used in the model over
+        slice_heads
+
+        Borrows template from MetalModel.calculate_probs """
+
+        assert self.eval()
+        slice_task_names = sorted(
+            [slice_task_name for slice_task_name in self.slice_tasks.keys()]
+        )
+
+        body = self.forward_body(X)
+        slice_heads = self.forward_heads(body, slice_task_names)
+        A_weights = self.forward_attention_logits(slice_heads, slice_task_names)
+        return A_weights
+
+    def attention_with_gold(self, payload):
+        """ Retrieve the attention weights used in the model for viz/debugging
+
+        Borrows template from MetalModel.predict_with_gold """
+
+        Ys = defaultdict(list)
+        A_weights = []
+
+        for batch_num, (Xb, Yb) in enumerate(payload.data_loader):
+            Ab = self.calculate_attention(Xb)
+            A_weights.extend(Ab.cpu().numpy())
+
+            # NOTE: this is redundant, because we only have one set of A_weights
+            # but we keep this format to match the expected format of Ys
+            for label_name, yb in Yb.items():
+                Ys[label_name].extend(yb.cpu().numpy())
+
+        return Ys, A_weights

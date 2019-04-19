@@ -32,31 +32,57 @@ def visualize_predictions(model, payload):
         X_slice = X[slice_mask, :]
         pred_slice = preds[slice_mask]
         gt_slice = Y[slice_mask]
-        plot_xy(X_slice, pred_slice, gt_slice)
+        plot_correctness(X_slice, pred_slice, gt_slice)
 
 
-def plot_xy(X, Y, gt=None):
-    """ Plot synthetic data.
-    If gt is provided, treats 'Y' as predictions, and shows correct/incorrect in
-    green/red.
+def visualize_attention(model, payload):
+    slice_task_names = sorted(
+        [slice_task_name for slice_task_name in model.slice_tasks.keys()]
+    )
 
-    If gt is not provided, treats Y as gt, and shows Y=1 vs. Y=2
-    """
-    if gt is not None:
-        preds = Y
-        correct_mask = preds == gt
-        incorrect_mask = preds != gt
-        plt.scatter(X[correct_mask, 0], X[correct_mask, 1], c="green")
-        plt.scatter(X[incorrect_mask, 0], X[incorrect_mask, 1], c="red")
+    Ys, A_weights = model.attention_with_gold(payload)
+    A_weights = np.array(A_weights)
 
-    else:
-        Y1_mask = Y == 1
-        Y2_mask = Y == 2
-        plt.scatter(X[Y1_mask, 0], X[Y1_mask, 1])
-        plt.scatter(X[Y2_mask, 0], X[Y2_mask, 1])
+    X = np.array(payload.data_loader.dataset.X_dict["data"])
+    for label_name, task_name in payload.labels_to_tasks.items():
+        for slice_idx, head_name in enumerate(slice_task_names):
+            print(f"Vizualizing {head_name} attention on {label_name}...")
+            Y = np.array(Ys[label_name]).squeeze()
+            slice_mask = Y != 0
+            X_slice = X[slice_mask, :]
+            A_slice = A_weights[slice_mask, slice_idx]  # visualize for slice_head
+            plot_attention(X_slice, A_slice)
 
+
+def set_and_show_plot(xlim=(-1, 1), ylim=(-1, 1)):
     # assume that all data lies within these (x, y) bounds
-    plt.xlim([-1, 1])
-    plt.ylim([-1, 1])
+    plt.xlim(xlim)
+    plt.ylim(ylim)
     plt.axes().set_aspect("equal")
     plt.show()
+
+
+def plot_xy(X, Y, gt=None, c=None):
+    Y1_mask = Y == 1
+    Y2_mask = Y == 2
+    plt.scatter(X[Y1_mask, 0], X[Y1_mask, 1])
+    plt.scatter(X[Y2_mask, 0], X[Y2_mask, 1])
+    set_and_show_plot()
+
+
+def plot_correctness(X, preds, gt):
+    # plot correct -> red and incorrect -> green
+    correct_mask = preds == gt
+    incorrect_mask = preds != gt
+    plt.scatter(X[correct_mask, 0], X[correct_mask, 1], c="green")
+    plt.scatter(X[incorrect_mask, 0], X[incorrect_mask, 1], c="red")
+    set_and_show_plot()
+
+
+def plot_attention(X, A):
+    # A must be a vector; we visualize weights for 1 slice_head at a time
+    assert A.shape == (len(X),)
+    # plot heatmap based on c values
+    sc = plt.scatter(X[:, 0], X[:, 1], c=A, vmin=0, vmax=1.0, cmap="inferno_r")
+    plt.colorbar(sc)
+    set_and_show_plot()
