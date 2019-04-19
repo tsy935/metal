@@ -61,13 +61,13 @@ def convert_to_slicing_tasks(tasks):
 
 def output_hat_func(X):
     """ Converts 1-dim output back to categorical probabilities for Metal compatibility. """
-    probs = F.sigmoid(X["data"])
+    probs = torch.sigmoid(X["data"])
     return torch.cat((probs, 1 - probs), dim=1)
 
 
 def categorical_cross_entropy(X, Y):
     return F.binary_cross_entropy(
-        F.sigmoid(X["data"]), convert_labels(Y, "categorical", "onezero").float()
+        torch.sigmoid(X["data"]), convert_labels(Y, "categorical", "onezero").float()
     )
 
 
