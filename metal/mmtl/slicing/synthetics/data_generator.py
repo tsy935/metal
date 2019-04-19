@@ -26,7 +26,7 @@ def generate_data(N, critical_slice_indicator):
     # abberation in decision boundary
     Y[critical_slice_indicator(X)] = 1
 
-    uid_lists, Xs, Ys = split_data(uids, X, Y, splits=[0.6, 0.1, 0.3], shuffle=True)
+    uid_lists, Xs, Ys = split_data(uids, X, Y, splits=[0.5, 0.25, 0.25], shuffle=True)
     return uid_lists, Xs, Ys
 
 

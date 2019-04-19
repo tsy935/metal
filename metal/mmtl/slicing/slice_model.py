@@ -113,9 +113,11 @@ class SliceModel(MetalModel):
         """ Perform forward pass with slice-reweighted base representation through
         the base_task head. """
 
-        slice_task_names = [
-            slice_task_name for slice_task_name in self.slice_tasks.keys()
-        ]
+        # Sort names to ensure that the representation is always
+        # computed in the same order
+        slice_task_names = sorted(
+            [slice_task_name for slice_task_name in self.slice_tasks.keys()]
+        )
 
         body = self.forward_body(X)
         slice_heads = self.forward_heads(body, slice_task_names)
@@ -126,7 +128,7 @@ class SliceModel(MetalModel):
         # slice_preds is the [batch_size, num_slices] concatenated prediction for
         # each slice head
         slice_preds = torch.cat(
-            [slice_head["data"] for slice_head in slice_heads.values()], dim=1
+            [slice_heads[slice_name]["data"] for slice_name in slice_task_names], dim=1
         )
 
         # slice_weights is the [num_slices, body_dim] concatenated tensor
