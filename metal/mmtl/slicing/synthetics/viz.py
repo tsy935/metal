@@ -2,13 +2,37 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def visualize_payload(p):
-    X = np.array(p.data_loader.dataset.X_dict["data"])
-    labelsets = p.data_loader.dataset.Y_dict
+def visualize_payload(payload):
+    """ Visualizes all labelsets for a given payload. """
+    X = np.array(payload.data_loader.dataset.X_dict["data"])
+    labelsets = payload.data_loader.dataset.Y_dict
     for label_name, labels in labelsets.items():
-        print(f"Vizualizing {label_name} from {p.name}...")
+        print(f"Vizualizing {label_name} from {payload.name}...")
         Y = labels.numpy()
         plot_xy(X, Y)
+
+
+def visualize_predictions(model, payload):
+    """ Use model to evaluate on payload and visualize
+    correct/incorrect predictions """
+    target_tasks = list(payload.labels_to_tasks.values())
+    target_labels = list(payload.labels_to_tasks.keys())
+    Ys, Ys_probs, Ys_preds = model.predict_with_gold(
+        payload, target_tasks, target_labels, return_preds=True
+    )
+
+    X = np.array(payload.data_loader.dataset.X_dict["data"])
+    for label_name, task_name in payload.labels_to_tasks.items():
+        model_name = model.__class__.__name__
+        print(f"Vizualizing {model_name} predictions on {label_name}...")
+        Y = np.array(Ys[label_name]).squeeze()
+        preds = np.array(Ys_preds[task_name]).squeeze()
+
+        slice_mask = Y != 0
+        X_slice = X[slice_mask, :]
+        pred_slice = preds[slice_mask]
+        gt_slice = Y[slice_mask]
+        plot_xy(X_slice, pred_slice, gt_slice)
 
 
 def plot_xy(X, Y, gt=None):
@@ -34,4 +58,5 @@ def plot_xy(X, Y, gt=None):
     # assume that all data lies within these (x, y) bounds
     plt.xlim([-1, 1])
     plt.ylim([-1, 1])
+    plt.axes().set_aspect("equal")
     plt.show()

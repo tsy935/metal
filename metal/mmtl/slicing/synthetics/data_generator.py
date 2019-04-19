@@ -9,7 +9,7 @@ def get_circle_mask(X, center, radius):
     return mask
 
 
-def generate_data(N):
+def generate_data(N, critical_slice_indicator):
     """ Generates data in numpy form.
 
     Returns: (
@@ -24,7 +24,7 @@ def generate_data(N):
     Y = (X[:, 0] > X[:, 1] + 0.25).astype(int) + 1
 
     # abberation in decision boundary
-    Y[get_circle_mask(X, (0.25, 0), 0.2)] = 1
+    Y[critical_slice_indicator(X)] = 1
 
     uid_lists, Xs, Ys = split_data(uids, X, Y, splits=[0.6, 0.1, 0.3], shuffle=True)
     return uid_lists, Xs, Ys
