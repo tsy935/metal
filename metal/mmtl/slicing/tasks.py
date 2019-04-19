@@ -1,3 +1,5 @@
+import copy
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,6 +9,15 @@ from metal.mmtl.modules import MetalModule, MetalModuleWrapper, unwrap_module
 from metal.mmtl.scorer import Scorer
 from metal.mmtl.task import ClassificationTask
 from metal.utils import convert_labels
+
+
+def create_slice_task(base_task, slice_task_name):
+    """Creates a slice task identical to a base task but with different head params"""
+    slice_task = copy.copy(base_task)
+    slice_task.name = slice_task_name
+    slice_task.head_module = copy.deepcopy(base_task.head_module)
+    slice_task.is_slice = True
+    return slice_task
 
 
 def convert_to_slicing_tasks(tasks):

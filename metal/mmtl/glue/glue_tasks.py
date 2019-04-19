@@ -25,7 +25,7 @@ from metal.mmtl.glue.glue_modules import (
 from metal.mmtl.glue.glue_slices import create_slice_labels
 from metal.mmtl.payload import Payload
 from metal.mmtl.scorer import Scorer
-from metal.mmtl.slicing.slicing import create_slice_task
+from metal.mmtl.slicing.tasks import create_slice_task
 from metal.mmtl.task import ClassificationTask, RegressionTask
 from metal.mmtl.token_task import TokenClassificationTask
 from metal.utils import recursive_merge_dicts, set_seed
