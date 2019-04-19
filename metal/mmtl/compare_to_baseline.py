@@ -47,7 +47,7 @@ def get_model_scores(tasks_slice, payloads_slice, seed, eval_payload):
     prefix = '{}/{}_'.format(task_name, task_name)
     for p_name, metric in [('train', 'loss'), ('valid', 'accuracy')]:
         for label_name in eval_payload.labels_to_tasks.keys():
-            task_metrics += [prefix + p_name + '/{}/{}'.format(task_name, label_name, metric)]
+            task_metrics += [prefix + p_name + '/{}/{}'.format(label_name, metric)]
     print(task_metrics)
     trainer = MultitaskTrainer(seed=seed)
     trainer.train_model(
