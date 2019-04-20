@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.special import expit
 
 
 def visualize_payload(payload):
@@ -23,8 +24,7 @@ def visualize_predictions(model, payload):
 
     X = np.array(payload.data_loader.dataset.X_dict["data"])
     for label_name, task_name in payload.labels_to_tasks.items():
-        model_name = model.__class__.__name__
-        print(f"Vizualizing {model_name} predictions on {label_name}...")
+        print(f"Vizualizing {task_name} predictions on {label_name}...")
         Y = np.array(Ys[label_name]).squeeze()
         preds = np.array(Ys_preds[task_name]).squeeze()
 
@@ -41,7 +41,7 @@ def visualize_attention(model, payload):
     )
 
     Ys, A_weights = model.attention_with_gold(payload)
-    A_weights = np.array(A_weights)
+    A_weights = expit(np.array(A_weights))
 
     X = np.array(payload.data_loader.dataset.X_dict["data"])
     for label_name, task_name in payload.labels_to_tasks.items():
@@ -83,6 +83,6 @@ def plot_attention(X, A):
     # A must be a vector; we visualize weights for 1 slice_head at a time
     assert A.shape == (len(X),)
     # plot heatmap based on c values
-    sc = plt.scatter(X[:, 0], X[:, 1], c=A, vmin=0, vmax=1.0, cmap="inferno_r")
+    sc = plt.scatter(X[:, 0], X[:, 1], c=expit(A), vmin=0, vmax=1.0, cmap="inferno")
     plt.colorbar(sc)
     set_and_show_plot()
