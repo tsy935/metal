@@ -20,8 +20,8 @@ def validate_slice_tasks(tasks):
                 "specified by a output_dim=1."
             )
 
-    base_tasks = [t for t in tasks if not t.is_slice]
-    slice_tasks = [t for t in tasks if t.is_slice]
+    base_tasks = [t for t in tasks if not t.slice_head_type]
+    slice_tasks = [t for t in tasks if t.slice_head_type]
 
     # validate base task
     if len(base_tasks) != 1:
@@ -62,7 +62,7 @@ def validate_slice_tasks(tasks):
             )
 
     # validate that one of the "slice_tasks" operates on the entire dataset
-    if not any([t.name.endswith(":BASE") for t in slice_tasks]):
+    if not any([":BASE" in t.name for t in slice_tasks]):
         raise ValueError(
             "There must be a `slice_task` designated to operate "
             f"on the entire labelset with name '{base_task.name}:BASE'."
@@ -74,27 +74,26 @@ class SliceModel(MetalModel):
 
     At the moment, only supports:
         * Binary classification heads (with output_dim=1, breaking Metal convention)
-        * A single base task + an arbitrary number of slice tasks (is_slice=True)
+        * A single base task + an arbitrary number of slice tasks (slice_head_type != None)
     """
 
-    def __init__(self, tasks, gating=False, **kwargs):
+    def __init__(self, tasks, **kwargs):
         validate_slice_tasks(tasks)
         super().__init__(tasks, **kwargs)
-        self.base_task = [t for t in self.task_map.values() if not t.is_slice][0]
-        self.slice_tasks = {name: t for name, t in self.task_map.items() if t.is_slice}
+        self.base_task = [
+            t for t in self.task_map.values() if t.slice_head_type is None
+        ][0]
+        self.slice_pred_tasks = {
+            name: t for name, t in self.task_map.items() if t.slice_head_type == "pred"
+        }
+        self.slice_ind_tasks = {
+            name: t for name, t in self.task_map.items() if t.slice_head_type == "ind"
+        }
 
         # which slice_head should we pay attention to?
         neck_dim = self.head_modules[self.base_task.name].module.module.in_features
-        self.attention = nn.Linear(
-            len(self.slice_tasks) + neck_dim, len(self.slice_tasks), bias=False
-        )
-
-        # At the moment, we assign the slice weights = 1/num_slices
-        # The base_task maintains its default multiplier = 1.0
-        # TODO: look into more rigorous way to do this
-        slice_weight = 1.0 / len(self.slice_tasks) if self.slice_tasks else 1.0
-        for t in self.slice_tasks.values():
-            t.loss_multiplier = slice_weight
+        num_slices = len(self.slice_pred_tasks)
+        self.attention = nn.Linear(num_slices + neck_dim, num_slices, bias=False)
 
     def forward_body(self, X):
         """ Makes a forward pass through the "body" of the network
@@ -117,34 +116,19 @@ class SliceModel(MetalModel):
 
         return {t: self.head_modules[t].module(body) for t in task_names}
 
-    # UNCOMMENT for confidence-based attention
-    # def forward_attention_logits(self, slice_heads, slice_task_names):
-    #     """ Computes unnomralized slice_head attention weights """
-    #
-    #     # slice_preds is the [batch_size, num_slices] concatenated prediction for
-    #     # each slice head
-    #     slice_preds = torch.cat(
-    #         [slice_heads[slice_name]["data"] for slice_name in slice_task_names], dim=1
-    #     )
-    #
-    #     # A is the [batch_size, num_slices] unormalized Tensor representing the
-    #     # amount of attention to pay to each head (based on each one's confidence)
-    #     A_weights = abs(slice_preds)
-    #     return A_weights
-
-    def forward_attention_logits(self, body, slice_heads, slice_task_names):
-        """ Computes unnomralized slice_head attention weights """
+    def forward_attention_logits(self, slice_ind_heads, slice_task_names):
+        """ Computes unnomralized slice_head attention weights based on
+        `in slice` indicators """
 
         # slice_preds is the [batch_size, num_slices] concatenated prediction for
         # each slice head
-        slice_preds = torch.cat(
-            [slice_heads[slice_name]["data"] for slice_name in slice_task_names], dim=1
+        slice_inds = torch.cat(
+            [slice_ind_heads[name]["data"] for name in slice_task_names], dim=1
         )
 
-        # A_weights [num_slices, num_slices] maps the slice_preds concat with
-        # body representation to learned attention weights
-        pred_cat_body = torch.cat((slice_preds, body["data"]), dim=1)
-        A_weights = self.attention(pred_cat_body)
+        # A_weights is the [batch_size, num_slices] unormalized Tensor where
+        # more positive values indicate more likely to be in the slice
+        A_weights = slice_inds
         return A_weights
 
     def forward(self, X, task_names):
@@ -153,26 +137,30 @@ class SliceModel(MetalModel):
 
         # Sort names to ensure that the representation is always
         # computed in the same order
-        slice_task_names = sorted(
-            [slice_task_name for slice_task_name in self.slice_tasks.keys()]
+        slice_pred_names = sorted(
+            [slice_task_name for slice_task_name in self.slice_pred_tasks.keys()]
+        )
+
+        slice_ind_names = sorted(
+            [slice_task_name for slice_task_name in self.slice_ind_tasks.keys()]
         )
 
         body = self.forward_body(X)
-        slice_heads = self.forward_heads(body, slice_task_names)
+        slice_pred_heads = self.forward_heads(body, slice_pred_names)
+        slice_ind_heads = self.forward_heads(body, slice_ind_names)
 
         # [batch_size, num_slices] unnormalized attention weights.
         # we then normalize the weights across all heads
-        A_weights = self.forward_attention_logits(body, slice_heads, slice_task_names)
-        # A_weights = self.forward_attention_logits(slice_heads, slice_task_names)
+        A_weights = self.forward_attention_logits(slice_ind_heads, slice_ind_names)
         A = F.softmax(A_weights, dim=1)
 
         # slice_weights is the [num_slices, body_dim] concatenated tensor
-        # representing linear transforms for the body into the head values
+        # representing linear transforms for the body into the slice prediction values
         slice_weights = torch.cat(
             [
                 # TODO: fix the need for a double module (DataParllel + MetalModule)...
                 self.head_modules[t].module.module.weight
-                for t in slice_task_names
+                for t in slice_pred_names
             ],
             dim=0,
         )
@@ -186,7 +174,8 @@ class SliceModel(MetalModel):
 
         # compute losses for individual slices + reweighted Y_head
         output = self.forward_heads(body, [self.base_task.name])
-        output.update(slice_heads)
+        output.update(slice_pred_heads)
+        output.update(slice_ind_heads)
         return output
 
     @torch.no_grad()
@@ -197,13 +186,13 @@ class SliceModel(MetalModel):
         Borrows template from MetalModel.calculate_probs """
 
         assert self.eval()
-        slice_task_names = sorted(
-            [slice_task_name for slice_task_name in self.slice_tasks.keys()]
+        slice_ind_names = sorted(
+            [slice_task_name for slice_task_name in self.slice_ind_tasks.keys()]
         )
 
         body = self.forward_body(X)
-        slice_heads = self.forward_heads(body, slice_task_names)
-        A_weights = self.forward_attention_logits(body, slice_heads, slice_task_names)
+        slice_ind_heads = self.forward_heads(body, slice_ind_names)
+        A_weights = self.forward_attention_logits(slice_ind_heads, slice_ind_names)
         return A_weights
 
     def attention_with_gold(self, payload):

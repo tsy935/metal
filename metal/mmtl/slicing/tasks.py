@@ -11,12 +11,13 @@ from metal.mmtl.task import ClassificationTask
 from metal.utils import convert_labels
 
 
-def create_slice_task(base_task, slice_task_name):
+def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multiplier=1.0):
     """Creates a slice task identical to a base task but with different head params"""
     slice_task = copy.copy(base_task)
     slice_task.name = slice_task_name
     slice_task.head_module = copy.deepcopy(base_task.head_module)
-    slice_task.is_slice = True
+    slice_task.slice_head_type = slice_head_type
+    slice_task.loss_multiplier = loss_multiplier
     return slice_task
 
 
@@ -92,7 +93,7 @@ class BinaryClassificationTask(ClassificationTask):
         loss_hat_func=categorical_cross_entropy,
         loss_multiplier=1.0,
         scorer=Scorer(standard_metrics=["accuracy"]),
-        is_slice=False,
+        slice_head_type=None,
     ) -> None:
 
         if (
@@ -114,12 +115,13 @@ class BinaryClassificationTask(ClassificationTask):
             scorer,
         )
 
-        # Add additional `is_slice` attribute
-        self.is_slice = is_slice
+        # Add an additional attribute to indicator head type
+        assert slice_head_type in ["ind", "pred", None]
+        self.slice_head_type = slice_head_type
 
     def __repr__(self):
         """Overrides existing __repr__ function to include slice information."""
         metal_repr = str(super(BinaryClassificationTask, self).__repr__())
         return (
-            f"{metal_repr[:-1]}, is_slice={self.is_slice})"
+            f"{metal_repr[:-1]}, slice_head_type={self.slice_head_type})"
         )  # trim closing paren in repr')'

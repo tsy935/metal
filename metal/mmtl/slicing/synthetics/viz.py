@@ -36,8 +36,8 @@ def visualize_predictions(model, payload):
 
 
 def visualize_attention(model, payload):
-    slice_task_names = sorted(
-        [slice_task_name for slice_task_name in model.slice_tasks.keys()]
+    slice_ind_names = sorted(
+        [slice_task_name for slice_task_name in model.slice_ind_tasks.keys()]
     )
 
     Ys, A_weights = model.attention_with_gold(payload)
@@ -45,7 +45,7 @@ def visualize_attention(model, payload):
 
     X = np.array(payload.data_loader.dataset.X_dict["data"])
     for label_name, task_name in payload.labels_to_tasks.items():
-        for slice_idx, head_name in enumerate(slice_task_names):
+        for slice_idx, head_name in enumerate(slice_ind_names):
             print(f"Vizualizing {head_name} attention on {label_name}...")
             Y = np.array(Ys[label_name]).squeeze()
             slice_mask = Y != 0
@@ -65,8 +65,9 @@ def set_and_show_plot(xlim=(-1, 1), ylim=(-1, 1)):
 def plot_xy(X, Y, gt=None, c=None):
     Y1_mask = Y == 1
     Y2_mask = Y == 2
-    plt.scatter(X[Y1_mask, 0], X[Y1_mask, 1])
-    plt.scatter(X[Y2_mask, 0], X[Y2_mask, 1])
+    plt.scatter(X[Y1_mask, 0], X[Y1_mask, 1], label="Y=1")
+    plt.scatter(X[Y2_mask, 0], X[Y2_mask, 1], label="Y=2")
+    plt.legend()
     set_and_show_plot()
 
 
@@ -83,6 +84,6 @@ def plot_attention(X, A):
     # A must be a vector; we visualize weights for 1 slice_head at a time
     assert A.shape == (len(X),)
     # plot heatmap based on c values
-    sc = plt.scatter(X[:, 0], X[:, 1], c=expit(A), vmin=0, vmax=1.0, cmap="inferno")
+    sc = plt.scatter(X[:, 0], X[:, 1], c=A, vmin=0, vmax=1.0, cmap="inferno_r")
     plt.colorbar(sc)
     set_and_show_plot()

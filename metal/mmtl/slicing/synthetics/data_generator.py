@@ -1,12 +1,12 @@
 import numpy as np
 
-from metal.utils import split_data
+from metal.utils import convert_labels, split_data
 
 
 def get_circle_mask(X, center, radius):
     h, k = center
     mask = np.sqrt((X[:, 0] - h) ** 2 + (X[:, 1] - k) ** 2) < radius
-    return mask
+    return mask.astype(np.bool)
 
 
 def generate_data(N, decision_boundary_flip):
@@ -34,20 +34,29 @@ def generate_slice_labels(X, Y, slice_funcs):
     """
     Args:
         X: [N x D] data
-        Y: [N x 1] labels
+        Y: [N x 1] labels \in {0, 1}
         slice_funcs [dict]: mapping slice_names to slice_fn(X),
-            which returns [N x 1] mask indic. whether examples are in slice
+            which returns [N x 1] boolean mask indic. whether examples are in slice
 
     Returns:
-        slice_labels [dict]: mapping slice_names to slice_labels [N x 1],
-            where 0 labels indicate abstains
+        slice_labels [dict]: mapping slice_names to dict of {
+            pred: [N x 1] \in {0, 1, 2} original Y abstaining (with 0)
+                on examples not in slice
+            ind: [N x 1] \in {1, 2} mask labels in categorical format
+        }
     """
     slice_labels = {}
     for slice_name, slice_fn in slice_funcs.items():
         slice_mask = slice_fn(X)
-        slice_label = Y.copy()
+        Y_gt = Y.copy()
         # if not in slice, abstain with label = 0
-        slice_label[np.logical_not(slice_mask)] = 0
-        slice_labels[slice_name] = slice_label
+        Y_gt[np.logical_not(slice_mask)] = 0
+
+        # convert from True/False mask -> 1,2 categorical labels
+        categorical_indicator = convert_labels(
+            slice_mask.astype(np.int), "onezero", "categorical"
+        )
+
+        slice_labels[slice_name] = {"ind": categorical_indicator, "pred": Y_gt}
 
     return slice_labels
