@@ -11,8 +11,8 @@ from metal.mmtl.slicing.tasks import BinaryClassificationTask, create_slice_task
 
 
 def create_tasks(task_name, slice_names=[]):
-    input_module = nn.Linear(2, 8)
-    head_module = nn.Linear(8, 1)  # NOTE: slice_model requires 1dim output head
+    input_module = nn.Sequential(nn.Linear(2, 5), nn.ReLU())
+    head_module = nn.Linear(5, 1)  # NOTE: slice_model requires 1dim output head
     task = BinaryClassificationTask(
         name=task_name, input_module=input_module, head_module=head_module
     )
