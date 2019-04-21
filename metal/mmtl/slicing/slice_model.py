@@ -90,11 +90,6 @@ class SliceModel(MetalModel):
             name: t for name, t in self.task_map.items() if t.slice_head_type == "ind"
         }
 
-        # which slice_head should we pay attention to?
-        neck_dim = self.head_modules[self.base_task.name].module.module.in_features
-        num_slices = len(self.slice_pred_tasks)
-        self.attention = nn.Linear(num_slices + neck_dim, num_slices, bias=False)
-
     def forward_body(self, X):
         """ Makes a forward pass through the "body" of the network
         (everything before the head)."""
@@ -158,7 +153,7 @@ class SliceModel(MetalModel):
         # representing linear transforms for the body into the slice prediction values
         slice_weights = torch.cat(
             [
-                # TODO: fix the need for a double module (DataParllel + MetalModule)...
+                # TODO: sad! double module (DataParllel + MetalModule)
                 self.head_modules[t].module.module.weight
                 for t in slice_pred_names
             ],
@@ -207,8 +202,8 @@ class SliceModel(MetalModel):
             Ab = self.calculate_attention(Xb)
             A_weights.extend(Ab.cpu().numpy())
 
-            # NOTE: this is redundant, because we only have one set of A_weights
-            # but we keep this format to match the expected format of Ys
+            # NOTE: we only have one set of A_weights, but we load every set of
+            # Ys to match the expected dictionary format of the Y_dict
             for label_name, yb in Yb.items():
                 Ys[label_name].extend(yb.cpu().numpy())
 

@@ -10,6 +10,24 @@ from metal.mmtl.slicing.synthetics.data_generator import (
 from metal.mmtl.slicing.tasks import BinaryClassificationTask, create_slice_task
 
 
+def remap_labelsets(payload, labels_to_tasks):
+    """ Remaps payload.labels_to_tasks based on specified dictionary. All other
+        defaults to `labelset` -> `None`.
+
+    Args:
+        labels_to_heads: if specified, remaps (in-place) labelsets to specified
+            task heads.
+
+    """
+    test_labelsets = payload.labels_to_tasks.keys()
+    for label_name in test_labelsets:
+        if label_name in labels_to_tasks:
+            new_task = labels_to_tasks[label_name]
+            payload.retarget_labelset(label_name, new_task)
+        else:
+            payload.retarget_labelset(label_name, None)
+
+
 def create_tasks(task_name, slice_names=[], verbose=False):
     input_module = nn.Sequential(nn.Linear(2, 5), nn.ReLU())
     head_module = nn.Linear(5, 1)  # NOTE: slice_model requires 1dim output head
@@ -21,6 +39,7 @@ def create_tasks(task_name, slice_names=[], verbose=False):
     # for each slice create an 'ind' task: predicts whether we are in the slice
     # and a 'pred' task: "expert" on predicting labels of slice
     for slice_name in slice_names:
+        # TODO: make loss_multiplier a parameter
         loss_multiplier = 1.0 / (2 * len(slice_names))
         slice_pred_task = create_slice_task(
             task,

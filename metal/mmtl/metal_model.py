@@ -260,6 +260,9 @@ class MetalModel(nn.Module):
 
         metrics_dict = {}
         for label_name, task_name in payload.labels_to_tasks.items():
+            if task_name is None:
+                continue
+
             scorer = self.task_map[task_name].scorer
             task_metrics_dict = scorer.score(
                 Ys[label_name],
@@ -317,6 +320,9 @@ class MetalModel(nn.Module):
         validate_targets(payload, target_tasks, target_labels)
         if target_tasks is None:
             target_tasks = set(payload.labels_to_tasks.values())
+
+        # filter tasks that are None (if we don't want to evaluate a particular labelset)
+        target_tasks = [t for t in target_tasks if t is not None]
 
         if target_labels is None:
             target_labels = set(payload.labels_to_tasks.keys())

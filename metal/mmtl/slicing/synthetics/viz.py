@@ -1,6 +1,24 @@
+import pprint
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import expit
+
+pp = pprint.PrettyPrinter(indent=4)
+
+
+def score_and_visualize(model, payload, labels_to_heads={}):
+    """ Score model on payload and visualize correct/incorrect predictions.
+
+    Args:
+        model: trained model to evaluate
+        payload: payload to evaluate on
+    """
+    print("Eval mapping...")
+    pp.pprint(payload.labels_to_tasks)
+    print("Model Scores:")
+    pp.pprint(model.score(payload))
+    visualize_predictions(model, payload)
 
 
 def visualize_payload(payload):
@@ -8,7 +26,7 @@ def visualize_payload(payload):
     X = np.array(payload.data_loader.dataset.X_dict["data"])
     labelsets = payload.data_loader.dataset.Y_dict
     for label_name, labels in labelsets.items():
-        print(f"Vizualizing {label_name} from {payload.name}...")
+        print(f"Vizualizing {label_name} from {payload.name}")
         Y = labels.numpy()
         plot_xy(X, Y)
 
@@ -24,7 +42,10 @@ def visualize_predictions(model, payload):
 
     X = np.array(payload.data_loader.dataset.X_dict["data"])
     for label_name, task_name in payload.labels_to_tasks.items():
-        print(f"Vizualizing {task_name} predictions on {label_name}...")
+        if task_name is None:
+            continue
+
+        print(f"Vizualizing {task_name} predictions on {label_name}")
         Y = np.array(Ys[label_name]).squeeze()
         preds = np.array(Ys_preds[task_name]).squeeze()
 
@@ -41,12 +62,16 @@ def visualize_attention(model, payload):
     )
 
     Ys, A_weights = model.attention_with_gold(payload)
+    # apply a sigmoid to better normalize the raw logits
     A_weights = expit(np.array(A_weights))
 
     X = np.array(payload.data_loader.dataset.X_dict["data"])
     for label_name, task_name in payload.labels_to_tasks.items():
+        if task_name is None:
+            continue
+
         for slice_idx, head_name in enumerate(slice_ind_names):
-            print(f"Vizualizing {head_name} attention on {label_name}...")
+            print(f"Vizualizing {head_name} attention on {label_name}")
             Y = np.array(Ys[label_name]).squeeze()
             slice_mask = Y != 0
             X_slice = X[slice_mask, :]
