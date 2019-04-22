@@ -26,8 +26,6 @@ def convert_to_slicing_tasks(tasks):
     slicing_tasks = []
     for t in tasks:
         if isinstance(t, ClassificationTask):
-            # NOTE: in current convention, slice tasks are named base_task:slice_name
-            is_slice = ":" in t.name
             input_module = unwrap_module(t.input_module)
             middle_module = unwrap_module(t.middle_module)
             attention_module = unwrap_module(t.attention_module)
@@ -43,14 +41,24 @@ def convert_to_slicing_tasks(tasks):
             else:
                 raise ValueError(f"head_module for {t.name} is not a valid FC layer.")
 
-            slice_t = BinaryClassificationTask(
-                t.name,
-                input_module,
-                middle_module,
-                attention_module,
-                head_module,
-                is_slice=is_slice,
-            )
+            if not hasattr(t, "slice_head_type"):
+                slice_t = BinaryClassificationTask(
+                    t.name,
+                    input_module,
+                    middle_module,
+                    attention_module,
+                    head_module,
+                    slice_head_type=None,
+                )
+            else:
+                slice_t = BinaryClassificationTask(
+                    t.name,
+                    input_module,
+                    middle_module,
+                    attention_module,
+                    head_module,
+                    slice_head_type=t.slice_head_type,
+                )
 
             slicing_tasks.append(slice_t)
 

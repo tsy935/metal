@@ -376,8 +376,15 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
 
         # Add a task for each slice
         for slice_name in slice_names:
+            loss_multiplier = 1.0 / (2 * len(slice_names))
             slice_task_name = f"{task_name}_slice:{slice_name}"
-            slice_task = create_slice_task(task, slice_task_name)
+            slice_task = create_slice_task(
+                task, f"{slice_task_name}:ind", "ind", loss_multiplier=loss_multiplier
+            )
+            tasks.append(slice_task)
+            slice_task = create_slice_task(
+                task, f"{slice_task_name}:pred", "pred", loss_multiplier=loss_multiplier
+            )
             tasks.append(slice_task)
 
         if has_payload and not skip_payloads:
@@ -397,14 +404,22 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
                 # Add a labelset slice to each split
                 dataset = payload.data_loader.dataset
                 for slice_name in slice_names:
-                    slice_task_name = f"{task_name}_slice:{slice_name}"
+                    slice_head_types = ["ind", "pred"]
                     slice_labels = create_slice_labels(
                         dataset, base_task_name=task_name, slice_name=slice_name
                     )
-                    labelset_slice_name = f"{task_name}_slice:{slice_name}"
-                    payload.add_label_set(
-                        slice_task_name, labelset_slice_name, slice_labels
-                    )
+                    for slice_head_type in slice_head_types:
+                        slice_task_name = (
+                            f"{task_name}_slice:{slice_name}:{slice_head_type}"
+                        )
+                        labelset_slice_name = (
+                            f"{task_name}_slice:{slice_name}:{slice_head_type}"
+                        )
+                        payload.add_label_set(
+                            slice_task_name,
+                            labelset_slice_name,
+                            slice_labels[slice_head_type],
+                        )
 
                 payloads.append(payload)
 
