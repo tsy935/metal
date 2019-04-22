@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from multiprocessing import Pool
+import dask
 
 
 # Loading pretrained segnet (from https://github.com/imlab-uiip/lung-segmentation-2d)
@@ -70,7 +71,11 @@ class CannySegSliceModule(nn.Module):
         super(CannySegSliceModule, self).__init__()
         self.canny_kwargs = canny_kwargs
         self.num_procs = num_procs
-    
+        
+        # Loading unet
+        model_name = '../../../../../../lung-segmentation-2d/trained_model.hdf5'
+        self.UNet = load_model(model_name)   
+        
     def canny_edge_detection(self, x, kwargs):
         x = np.array(x, dtype=np.uint8)
         x = x+np.min(x)
@@ -100,12 +105,8 @@ class CannySegSliceModule(nn.Module):
         im_shape = xx.shape
         xx = xx[None,:,:,None]
 
-
-        model_name = '../../../../../../lung-segmentation-2d/trained_model.hdf5'
-        UNet = load_model(model_name)
-
         img = exposure.rescale_intensity(np.squeeze(xx), out_range=(0,1))
-        pred = UNet.predict(xx)[..., 0]
+        pred = self.UNet.predict(xx)[..., 0]
 
         pr = pred > 0.5
 
@@ -248,24 +249,34 @@ class CannySegSliceModule(nn.Module):
     def forward(self, x, return_image=False):
         batch_size = x.shape[0]
         if self.num_procs>1:
-            pool = Pool(processes=self.num_procs)
-            print("Using pool...")
-            args_list = []
-            inds = [a for a in range(x.shape[0])]
-            for ind in inds:
-                args_list.append([x[ind,0,:,:],return_image])
+            #pool = Pool(processes=self.num_procs)
+            #print("Using pool...")
+            #args_list = []
+            #inds = [a for a in range(x.shape[0])]
+            #for ind in inds:
+            #    args_list.append([x[ind,0,:,:],return_image])
                 
             # pool = mp.Pool(processes=4)
             #results = [pool.apply_async(cube, args=(x,)) for x in range(1,7)]
             #output = [p.get() for p in results]
-            predictions = pool.map(self.forward_fun,args_list)
-            pool.close()
-            pool.join()
+            #predictions = pool.map(self.forward_fun,args_list)
+            #pool.close()
+            #pool.join()
+            #return torch.Tensor(np.array(predictions).astype(int))
+        
+            delayed_results = []
+            for ii in range(batch_size):
+                x_tmp = x[ii,0,:,:]
+                pred = dask.delayed(self.forward_fun)([x_tmp,return_image])
+                delayed_results.append(pred)
+
+            print('Computing with dask...')
+            predictions = dask.compute(*delayed_results)
             return torch.Tensor(np.array(predictions).astype(int))
         else:
             predictions = []
             for ii in range(batch_size):
+               # print(f"Running sample {ii+1} of {batch_size}...")
                 x_tmp = x[ii,0,:,:]
                 predictions.append(self.forward_fun([x_tmp,return_image]))
-             #   print(f"Sample {ii} of {batch_size} complete...")
             return torch.Tensor(np.array(predictions).astype(int))
