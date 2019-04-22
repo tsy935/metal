@@ -341,7 +341,8 @@ def create_cxr_datasets(
     subsample=-1,
     verbose=True,
     dataset_kwargs = {},
-    get_uid = False
+    get_uid = False,
+    return_dict=False
 ):
     if verbose:
         print(f"Loading {dataset_name} Dataset")
@@ -363,6 +364,7 @@ def create_cxr_datasets(
             subsample=subsample,
             finding=finding,
             get_uid = get_uid,
+            return_dict = return_dict,
             **dataset_kwargs
         )
     return datasets
