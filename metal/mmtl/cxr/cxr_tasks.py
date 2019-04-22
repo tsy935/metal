@@ -297,7 +297,7 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
                         slice_task_name = f"{task_name}:{slice_name}"
                         slice_task = create_slice_task(task, slice_task_name)
                         tasks.append(slice_task)
-                        add_slice_labels(payload, dataset, task_name, slice_name)
+                        add_slice_labels(payload, task_name, slice_name)
 
     return tasks, payloads
 
@@ -342,7 +342,7 @@ def create_cxr_datasets(
     verbose=True,
     dataset_kwargs = {},
     get_uid = False,
-    return_dict=False
+    return_dict=True
 ):
     if verbose:
         print(f"Loading {dataset_name} Dataset")
