@@ -4,6 +4,7 @@ from functools import partial
 import numpy as np
 import torch
 import torch.nn as nn
+from multiprocessing import Pool
 
 
 # Loading pretrained segnet (from https://github.com/imlab-uiip/lung-segmentation-2d)
@@ -61,11 +62,14 @@ def get_canny_seg_diff_image(x, kwargs):
     
     return diff_img, lungs, edges
 
+
+###### MAKING MODULE CONTAINING ALL CONSTITUENT FUNCTIONS ######
+
 class CannySegSliceModule(nn.Module):
-    def __init__(self, canny_kwargs={'apertureSize':3, 'L2gradient':True}):
+    def __init__(self, num_procs=1, canny_kwargs={'apertureSize':3, 'L2gradient':True}):
         super(CannySegSliceModule, self).__init__()
         self.canny_kwargs = canny_kwargs
-    
+        self.num_procs = num_procs
     
     def canny_edge_detection(self, x, kwargs):
         x = np.array(x, dtype=np.uint8)
@@ -125,20 +129,26 @@ class CannySegSliceModule(nn.Module):
         diff_img_copy = np.uint8(x.copy()).squeeze()
         line_image = np.zeros(diff_img_copy.shape)
         lines = cv2.HoughLinesP(diff_img_copy,rho = 1,theta = 1*np.pi/180, threshold=4, minLineLength=3, maxLineGap=5)
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            cv2.line(line_image,(x1,y1),(x2,y2),(255,255,255),1)
+        if lines is not None:
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                cv2.line(line_image,(x1,y1),(x2,y2),(255,255,255),1)
             
-        return line_image
+            return line_image
+        else:
+            return None
     
     def get_hough_lines_2(self, x):
         lines_2 = cv2.HoughLinesP(x,rho = 1,theta = 1*np.pi/180, threshold=4,minLineLength=10, maxLineGap=4)
         line_image_2 = np.zeros(x.shape)
-        for line in lines_2:
-            x1, y1, x2, y2 = line[0]
-            cv2.line(line_image_2,(x1,y1),(x2,y2),(255,255,255),1)
+        if lines_2 is not None:
+            for line in lines_2:
+                x1, y1, x2, y2 = line[0]
+                cv2.line(line_image_2,(x1,y1),(x2,y2),(255,255,255),1)
 
-        return line_image_2, lines_2
+            return line_image_2, lines_2
+        else:
+            return line_image_2, None
     
     def get_connected_components(self, im,sz=10):
         # 5. perform a connected component analysis on the thresholded image, then store only the "large" blobs into mask
@@ -189,7 +199,10 @@ class CannySegSliceModule(nn.Module):
         lng_cutoff = 40
         return (is_vert and (lng>lng_cutoff))
     
-    def forward(self, x, return_image = False):
+    def forward_fun(self, args):
+        # dimension of x is [1024, 1024]
+        x, return_image = args
+        
         # Getting canny edges and lung segmentations
         diff_img, lungs, edges = self.get_canny_seg_diff_image(x, kwargs=self.canny_kwargs)
         
@@ -198,6 +211,10 @@ class CannySegSliceModule(nn.Module):
         
         # Getting first hough lines
         hough_line_image_1 = self.get_hough_lines_1(edge_reduced_image)
+        
+        # If no lines, no drain
+        if hough_line_image_1 is None:
+            return False
         
         # Getting morphological closure
         morph_clos_1 = cv2.morphologyEx(hough_line_image_1, cv2.MORPH_CLOSE, kernel=np.array([2,10]),iterations=10)
@@ -216,6 +233,10 @@ class CannySegSliceModule(nn.Module):
         # Getting hough lines for largest connected component
         hough_line_image_2, hough_lines_2 = self.get_hough_lines_2(conn)
         
+        # If no lines, no drain
+        if hough_lines_2 is None:
+            return False
+        
         # Executing heuristic function
         out = self.heuristic_function(hough_lines_2, length)
         
@@ -223,3 +244,28 @@ class CannySegSliceModule(nn.Module):
             return out, hough_line_image_2
         else:
             return out
+        
+    def forward(self, x, return_image=False):
+        batch_size = x.shape[0]
+        if self.num_procs>1:
+            pool = Pool(processes=self.num_procs)
+            print("Using pool...")
+            args_list = []
+            inds = [a for a in range(x.shape[0])]
+            for ind in inds:
+                args_list.append([x[ind,0,:,:],return_image])
+                
+            # pool = mp.Pool(processes=4)
+            #results = [pool.apply_async(cube, args=(x,)) for x in range(1,7)]
+            #output = [p.get() for p in results]
+            predictions = pool.map(self.forward_fun,args_list)
+            pool.close()
+            pool.join()
+            return torch.Tensor(np.array(predictions).astype(int))
+        else:
+            predictions = []
+            for ii in range(batch_size):
+                x_tmp = x[ii,0,:,:]
+                predictions.append(self.forward_fun([x_tmp,return_image]))
+             #   print(f"Sample {ii} of {batch_size} complete...")
+            return torch.Tensor(np.array(predictions).astype(int))
