@@ -1,12 +1,15 @@
 import cv2
+from collections import Counter
 from functools import partial
 import numpy as np
 import torch
+import torch.nn as nn
 
 
 # Loading pretrained segnet (from https://github.com/imlab-uiip/lung-segmentation-2d)
 from keras.models import load_model
-from skimage import exposure, morphology
+from skimage import exposure, morphology, measure
+from skimage.morphology import skeletonize
 
 mean = [0.485, 0.456, 0.406]
 std = [0.229, 0.224, 0.225]
@@ -57,3 +60,166 @@ def get_canny_seg_diff_image(x, kwargs):
     diff_img = (lungs*255 - edges)*lungs
     
     return diff_img, lungs, edges
+
+class CannySegSliceModule(nn.Module):
+    def __init__(self, canny_kwargs={'apertureSize':3, 'L2gradient':True}):
+        super(CannySegSliceModule, self).__init__()
+        self.canny_kwargs = canny_kwargs
+    
+    
+    def canny_edge_detection(self, x, kwargs):
+        x = np.array(x, dtype=np.uint8)
+        x = x+np.min(x)
+        return cv2.Canny(x, **kwargs)
+    
+    
+    def get_canny_edges(self, x, kwargs):
+        v = x.median()*255
+        sigma = 0.33
+        lower_thresh = int(max(0, (1.0 - sigma) * v))
+        upper_thresh = int(min(255, (1.0 + sigma) * v))
+        kwargs.update({'threshold1':lower_thresh, 'threshold2':upper_thresh})
+        proc_fun = partial(self.canny_edge_detection, kwargs=kwargs)
+        x_out = proc_fun(x*255)
+        return x_out
+
+    
+    def remove_small_regions(self, img, size):
+        """Morphologically removes small (less than size) connected regions of 0s or 1s."""
+        img = morphology.remove_small_objects(img, size)
+        img = morphology.remove_small_holes(img, size)
+        return img
+    
+    
+    def get_lung_segmentation(self, x):
+        xx = (cv2.resize(np.array(x), dsize=(256, 256))-mean[0])/std[0]
+        im_shape = xx.shape
+        xx = xx[None,:,:,None]
+
+
+        model_name = '../../../../../../lung-segmentation-2d/trained_model.hdf5'
+        UNet = load_model(model_name)
+
+        img = exposure.rescale_intensity(np.squeeze(xx), out_range=(0,1))
+        pred = UNet.predict(xx)[..., 0]
+
+        pr = pred > 0.5
+
+        # Remove regions smaller than 2% of the image
+        pr = self.remove_small_regions(pr, 0.02 * np.prod(im_shape))
+        return pr, xx
+    
+    def get_canny_seg_diff_image(self, x, kwargs):
+        edges = self.get_canny_edges(x, kwargs).squeeze()
+        lungs, _ = self.get_lung_segmentation(x)
+
+        # resizing to align with lung segmentation
+        edges = cv2.resize(edges.squeeze(), dsize=(256, 256))
+
+        # getting difference image
+        diff_img = (lungs*255 - edges)*lungs
+
+        return diff_img, lungs, edges
+    
+    def get_hough_lines_1(self, x):
+        diff_img_copy = np.uint8(x.copy()).squeeze()
+        line_image = np.zeros(diff_img_copy.shape)
+        lines = cv2.HoughLinesP(diff_img_copy,rho = 1,theta = 1*np.pi/180, threshold=4, minLineLength=3, maxLineGap=5)
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            cv2.line(line_image,(x1,y1),(x2,y2),(255,255,255),1)
+            
+        return line_image
+    
+    def get_hough_lines_2(self, x):
+        lines_2 = cv2.HoughLinesP(x,rho = 1,theta = 1*np.pi/180, threshold=4,minLineLength=10, maxLineGap=4)
+        line_image_2 = np.zeros(x.shape)
+        for line in lines_2:
+            x1, y1, x2, y2 = line[0]
+            cv2.line(line_image_2,(x1,y1),(x2,y2),(255,255,255),1)
+
+        return line_image_2, lines_2
+    
+    def get_connected_components(self, im,sz=10):
+        # 5. perform a connected component analysis on the thresholded image, then store only the "large" blobs into mask
+        labels = measure.label(im, neighbors=8, background=0)
+        # mask is initially all black
+        mask = np.zeros(im.shape, dtype="uint8")
+        # loop over the unique components
+        for label in np.unique(labels):
+            # if this is the background label, ignore it
+            if label == 0:
+                continue
+
+            # otherwise, construct the mask for this label and count the
+            # number of pixels
+            labelMask = np.zeros(im.shape, dtype="uint8")
+            labelMask[labels == label] = 255
+            numPixels = cv2.countNonZero(labelMask)
+
+            # if the number of pixels in the component is sufficiently
+            # large, then add it to our mask of "large blobs"
+            if numPixels > sz:
+                # add the blob into mask
+                mask = cv2.add(mask, labelMask)
+        return mask
+    
+    def get_slope(self,line):
+        x1, y1, x2, y2 = line[0]
+        slope = (y2-y1)/(x2-x1)
+        return slope
+    
+    def get_dist(self,ln):
+        x1, y1, x2, y2 = ln
+        dist = np.sqrt((x2-x1)**2 + (y1-y2)**2)
+        return dist
+
+    def slope_percentage(self,lns):
+        if not isinstance(lns, list):
+            lns = [lns]
+        slope_abs = [np.abs(self.get_slope(line[0])) for line in lns]
+        vert = [slope_val>1 for slope_val in slope_abs]
+        return np.sum(vert)/len(vert)
+    
+    def heuristic_function(self,x,lng):
+        slope_perc = self.slope_percentage(x)
+        is_vert = np.abs(slope_perc)>0.5
+        
+        # minimum length of connected component -- make an arg?
+        lng_cutoff = 40
+        return (is_vert and (lng>lng_cutoff))
+    
+    def forward(self, x, return_image = False):
+        # Getting canny edges and lung segmentations
+        diff_img, lungs, edges = self.get_canny_seg_diff_image(x, kwargs=self.canny_kwargs)
+        
+        # Computing edges only within the lung segmentation
+        edge_reduced_image = lungs.squeeze()*edges.squeeze()
+        
+        # Getting first hough lines
+        hough_line_image_1 = self.get_hough_lines_1(edge_reduced_image)
+        
+        # Getting morphological closure
+        morph_clos_1 = cv2.morphologyEx(hough_line_image_1, cv2.MORPH_CLOSE, kernel=np.array([2,10]),iterations=10)
+    
+        # Skeletonizing
+        skel = skeletonize(morph_clos_1/255)
+        
+        # Getting labels from skeleton
+        labels = measure.label(skel, neighbors=8, background=0)
+        
+        # Getting largest connected component
+        sorted_components = Counter(labels.flatten()).most_common()[1:] # Ignoring background component
+        large_comp, length = sorted_components[0]
+        conn = self.get_connected_components(skel,length-1)
+        
+        # Getting hough lines for largest connected component
+        hough_line_image_2, hough_lines_2 = self.get_hough_lines_2(conn)
+        
+        # Executing heuristic function
+        out = self.heuristic_function(hough_lines_2, length)
+        
+        if return_image:
+            return out, hough_line_image_2
+        else:
+            return out
