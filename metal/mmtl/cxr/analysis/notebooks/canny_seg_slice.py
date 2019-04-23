@@ -67,10 +67,12 @@ def get_canny_seg_diff_image(x, kwargs):
 ###### MAKING MODULE CONTAINING ALL CONSTITUENT FUNCTIONS ######
 
 class CannySegSliceModule(nn.Module):
-    def __init__(self, num_procs=1, canny_kwargs={'apertureSize':3, 'L2gradient':True}):
+    def __init__(self, num_procs=1, lng_cutoff=40, slope_cutoff=0.5, canny_kwargs={'apertureSize':3, 'L2gradient':True}):
         super(CannySegSliceModule, self).__init__()
         self.canny_kwargs = canny_kwargs
         self.num_procs = num_procs
+        self.lng_cutoff = lng_cutoff
+        self.slope_cutoff = slope_cutoff
         
         # Loading unet
         model_name = '../../../../../../lung-segmentation-2d/trained_model.hdf5'
@@ -176,7 +178,7 @@ class CannySegSliceModule(nn.Module):
         return mask
     
     def get_slope(self,line):
-        x1, y1, x2, y2 = line[0]
+        x1, y1, x2, y2 = line
         slope = (y2-y1)/(x2-x1)
         return slope
     
@@ -186,18 +188,16 @@ class CannySegSliceModule(nn.Module):
         return dist
 
     def slope_percentage(self,lns):
-        if not isinstance(lns, list):
-            lns = [lns]
         slope_abs = [np.abs(self.get_slope(line[0])) for line in lns]
         vert = [slope_val>1 for slope_val in slope_abs]
         return np.sum(vert)/len(vert)
     
     def heuristic_function(self,x,lng):
         slope_perc = self.slope_percentage(x)
-        is_vert = np.abs(slope_perc)>0.5
+        is_vert = np.abs(slope_perc)>=self.slope_cutoff
         
         # minimum length of connected component -- make an arg?
-        lng_cutoff = 40
+        lng_cutoff = self.lng_cutoff
         return (is_vert and (lng>lng_cutoff))
     
     def forward_fun(self, args):
@@ -215,7 +215,7 @@ class CannySegSliceModule(nn.Module):
         
         # If no lines, no drain
         if hough_line_image_1 is None:
-            return False
+            return 2, None, None
         
         # Getting morphological closure
         morph_clos_1 = cv2.morphologyEx(hough_line_image_1, cv2.MORPH_CLOSE, kernel=np.array([2,10]),iterations=10)
@@ -236,19 +236,24 @@ class CannySegSliceModule(nn.Module):
         
         # If no lines, no drain
         if hough_lines_2 is None:
-            return False
+            return 2, None, None
         
         # Executing heuristic function
         out = self.heuristic_function(hough_lines_2, length)
+       
+        # Converting negatives to MeTaL convention
+        if out == 0:
+            out = 2
         
         if return_image:
-            return out, hough_line_image_2
+            return (out, hough_line_image_2, hough_lines_2)
         else:
             return out
         
     def forward(self, x, return_image=False):
         batch_size = x.shape[0]
-        if self.num_procs>1:
+        if self.num_procs>1: #DEPRECATED
+            pass
             #pool = Pool(processes=self.num_procs)
             #print("Using pool...")
             #args_list = []
@@ -264,19 +269,26 @@ class CannySegSliceModule(nn.Module):
             #pool.join()
             #return torch.Tensor(np.array(predictions).astype(int))
         
-            delayed_results = []
-            for ii in range(batch_size):
-                x_tmp = x[ii,0,:,:]
-                pred = dask.delayed(self.forward_fun)([x_tmp,return_image])
-                delayed_results.append(pred)
+           # delayed_results = []
+           # for ii in range(batch_size):
+           #     x_tmp = x[ii,0,:,:]
+           #     pred = dask.delayed(self.forward_fun)([x_tmp,return_image])
+           #     delayed_results.append(pred)
 
-            print('Computing with dask...')
-            predictions = dask.compute(*delayed_results)
-            return torch.Tensor(np.array(predictions).astype(int))
+           # print('Computing with dask...')
+           # predictions = dask.compute(*delayed_results)
+           # return torch.Tensor(np.array(predictions).astype(int))
         else:
             predictions = []
             for ii in range(batch_size):
                # print(f"Running sample {ii+1} of {batch_size}...")
                 x_tmp = x[ii,0,:,:]
                 predictions.append(self.forward_fun([x_tmp,return_image]))
-            return torch.Tensor(np.array(predictions).astype(int))
+            if not return_image:
+                return torch.Tensor(np.array(predictions).astype(int))
+            else:
+                preds = torch.Tensor(np.array([p[0] for p in predictions]).astype(int))
+                ims = [p[1] for p in predictions]
+                lines = [p[2] for p in predictions]
+                return preds, ims, lines
+                
