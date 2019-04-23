@@ -291,4 +291,8 @@ class CannySegSliceModule(nn.Module):
                 ims = [p[1] for p in predictions]
                 lines = [p[2] for p in predictions]
                 return preds, ims, lines
+            
+    
+    def predict(self, x, return_image=False):
+        return self.forward(x, return_image=return_image)
                 
