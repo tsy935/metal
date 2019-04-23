@@ -49,6 +49,7 @@ def convert_to_slicing_tasks(tasks):
                     attention_module,
                     head_module,
                     slice_head_type=None,
+                    loss_multiplier=t.loss_multiplier,
                 )
             else:
                 slice_t = BinaryClassificationTask(
@@ -58,6 +59,7 @@ def convert_to_slicing_tasks(tasks):
                     attention_module,
                     head_module,
                     slice_head_type=t.slice_head_type,
+                    loss_multiplier=t.loss_multiplier,
                 )
 
             slicing_tasks.append(slice_t)
