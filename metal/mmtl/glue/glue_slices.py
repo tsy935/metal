@@ -1,7 +1,10 @@
 import warnings
 
+import numpy as np
 import spacy
 import torch
+
+from metal.utils import convert_labels
 
 question_words = set(["who", "what", "where", "when", "why", "how"])
 nlp = spacy.load("en_core_web_sm")
@@ -122,4 +125,7 @@ def create_slice_labels(dataset, base_task_name, slice_name, verbose=False):
             print(f"Found {sum(slice_indicators)} examples in slice {slice_name}.")
 
     # NOTE: we assume here that all slice labels are for sentence-level tasks only
-    return Y_slice
+    # convert from True/False mask -> 1,2 categorical labels
+    categorical_indicator = convert_labels(slice_indicators, "onezero", "categorical")
+
+    return {"ind": categorical_indicator, "pred": Y_slice}
