@@ -36,6 +36,7 @@ class CXR8Dataset(Dataset):
         single_task=None,
         return_dict=True,
         label_transform={},
+        seed=None
     ):
 
         self.transform = transform
@@ -51,11 +52,16 @@ class CXR8Dataset(Dataset):
         self.dataset_name = dataset_name
         self.return_dict = return_dict
         self.label_transform = label_transform
+        if seed is None:
+            self.seed = 123
+        else:
+            self.seed = int(seed)
+        print(f"Using dataset seed: {self.seed}")
 
         # can limit to sample, useful for testing
         # if fold == "train" or fold =="val": sample=500
         if subsample > 0 and subsample < len(self.df):
-            self.df = self.df.sample(subsample)
+            self.df = self.df.sample(subsample, random_state=self.seed)
 
         if (
             not finding == "ALL"
@@ -344,6 +350,7 @@ def get_cxr_dataset(dataset_name, split, subsample=None, finding="ALL", pooled=F
     config = get_task_config(dataset_name, split, subsample, finding, transform_kwargs) 
     config["get_uid"] = kwargs.get("get_uid", False)
     config['return_dict'] = kwargs.get('return_dict', True)
+    config["seed"] = kwargs.get('seed', None)
     dataset_class = DATASET_CLASS_DICT[dataset_name] 
  
     return dataset_class( 
@@ -356,6 +363,7 @@ def get_cxr_dataset(dataset_name, split, subsample=None, finding="ALL", pooled=F
         pooled=False, 
         get_uid=config["get_uid"],
         dataset_name = dataset_name,
-        return_dict = config['return_dict']
+        return_dict = config['return_dict'],
+        seed=config["seed"]
     ) 
 

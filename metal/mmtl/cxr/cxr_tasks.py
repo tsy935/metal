@@ -201,6 +201,7 @@ def create_tasks_and_payloads(full_task_names, **kwargs):
                 pooled=config["pool_payload_tasks"],
                 finding=payload_finding,
                 verbose=True,
+                seed=config["seed"],
                 dataset_kwargs=dataset_kwargs
                 )
 
@@ -342,7 +343,8 @@ def create_cxr_datasets(
     verbose=True,
     dataset_kwargs = {},
     get_uid = False,
-    return_dict=True
+    return_dict=True,
+    seed=None
 ):
     if verbose:
         print(f"Loading {dataset_name} Dataset")
@@ -365,6 +367,7 @@ def create_cxr_datasets(
             finding=finding,
             get_uid = get_uid,
             return_dict = return_dict,
+            seed = seed,
             **dataset_kwargs
         )
     return datasets
