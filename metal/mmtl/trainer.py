@@ -5,6 +5,7 @@ import warnings
 from collections import defaultdict
 from pprint import pprint
 from shutil import copy2
+import pickle
 
 import dill
 import numpy as np
@@ -43,7 +44,7 @@ trainer_defaults = {
     "commit_hash": None,
     "ami": None,  # ami id for aws
     # Display
-    "progress_bar": False,
+    "progress_bar": True,
     # Dataloader
     # TODO: Restore the option for them to pass in raw simple data which we wrap up
     # "data_loader_config": {"batch_size": 32, "num_workers": 1, "shuffle": True},
@@ -72,9 +73,9 @@ trainer_defaults = {
     "lr_scheduler_config": {
         # Linearly increase lr up to "lr" over this many warmup_units
         "warmup_steps": 0.0,
-        "warmup_unit": "batches",  # ["epochs", "batches"]
+        "warmup_unit": "epochs",  # ["epochs", "batches"]
         # The minimum lr that will ever be used after warmup.
-        "min_lr": 0.0,
+        "min_lr": 1e-6,
         # Scheduler - exponential
         "exponential_config": {"gamma": 0.999},  # decay rate
         # Scheduler - reduce_on_plateau
@@ -85,6 +86,9 @@ trainer_defaults = {
         # The list of task metrics (task/split/metric) to calculate (and log);
         # if empty, calculate all metrics supported by all tasks' Scorers.
         "task_metrics": [],
+        # The list of trainer standard metrics to calculate (and log); e.g., "glue"
+        # Note that glue_partial is no longer supported.
+        "trainer_metrics": ["model/valid/all/loss"],
         # A list of functions that operate on a metrics_dict and return a dict with
         # additional metrics (e.g., aggregated metrics)
         "aggregate_metric_fns": [],
@@ -94,7 +98,7 @@ trainer_defaults = {
         # To score over multiple splits, set valid_split=None and use task_metrics
         "valid_split": "valid",
         # The name of the split to run final evaluation on after training
-        "test_split": None,  # If None, calculate final metrics over all splits
+        "test_split": "test",  # If None, calculate final metrics over all non-train splits
         # If non-None, only calculate and report these metrics every `score_every`
         # units (this can include the names of built-in and user-defined metrics);
         # otherwise, include all metrics returned by task Scorers.
@@ -108,7 +112,7 @@ trainer_defaults = {
     "logger_config": {
         "log_unit": "epochs",  # ['seconds', 'examples', 'batches', 'epochs']
         # Report loss every this many log_units
-        "log_every": 1.0,
+        "log_every": 0.2,
         # Calculate and report metrics every this many log_units:
         #   -1: default to log_every
         #   0: do not calculate or log metrics
@@ -136,14 +140,14 @@ trainer_defaults = {
     "checkpoint_cleanup": True,
     "checkpoint_config": {
         # TODO: unify checkpoint=['every', 'best', 'final']; specify one strategy
-        "checkpoint_every": 0,  # Save a model checkpoint every this many log_units
+        "checkpoint_every": 1.0,  # Save a model checkpoint every this many log_units
         # If checkpoint_best, also save the "best" model according to some metric
         # The "best" model will have the ['max', 'min'] value of checkpoint_metric
         # This metric must be produced by one of the task Scorer objects so it will be
         # available for lookup; assumes valid split unless appended with "train/"
-        "checkpoint_best": False,
+        "checkpoint_best": True,
         # "checkpoint_final": False,  # Save a model checkpoint at the end of training
-        "checkpoint_metric": "model/train/all/loss",
+        "checkpoint_metric": "model/valid/all/loss",
         "checkpoint_metric_mode": "min",
         # If None, checkpoint_dir defaults to the log_dir/run_dir/run_name/checkpoints
         # Note that using this default path is strongly recommended.
@@ -200,7 +204,7 @@ class MultitaskTrainer(object):
         self._set_lr_scheduler(model)  # TODO: Support more detailed training schedules
         self._set_task_scheduler(model, payloads)
 
-        # Record config
+        # Record config 
         if self.writer:
             self.writer.write_config(self.config)
 
@@ -438,6 +442,31 @@ class MultitaskTrainer(object):
 
         # Losses are handled specially; we drop them from task_metrics
         target_metrics = [metric for metric in task_metrics if "/loss" not in metric]
+
+        # NOTE: We currently break our own rule and calculate model-wide overall loss
+        # in calculate_task_metrics. We do this because we need access to the total
+        # loss and examples counts; we can't just average the task-specific losses
+        # equally after the fact.
+        trainer_metrics = self.config["metrics_config"]["trainer_metrics"]
+        target_loss_metrics = [
+            metric
+            for metric in (task_metrics + trainer_metrics)
+            if "/loss" in metric and "/train/" not in metric
+        ]
+
+        # Calculate loss for non-train splits
+        if target_loss_metrics:
+            if split is None:
+                splits = set(p.split for p in payloads) - set(["train"])
+            else:
+                splits = [split]
+            for loss_split in splits:
+                loss_dict = self._calculate_valid_losses(
+                    model, payloads, loss_split, max_examples=max_examples
+                )
+                for loss_name, loss_value in loss_dict.items():
+                    if loss_name in target_loss_metrics:
+                        metrics_dict[loss_name] = loss_value
 
         # Calculate metrics from Scorers
         for payload in payloads:
@@ -765,8 +794,17 @@ class MultitaskTrainer(object):
                 checkpoint_config = self.config["checkpoint_config"]
                 metric_name = checkpoint_config["checkpoint_metric"]
                 score = self.metrics_hist.get(metric_name, None)
-                if score is not None:
+                # HACK: We enforce min_lr right now by just overwriting
+                min_lr = lr_scheduler_config["min_lr"]
+                if min_lr and optimizer_to_use.param_groups[0]["lr"] < min_lr:
+                    optimizer_to_use.param_groups[0]["lr"] = min_lr
+                # Only updating every epoch!
+                if score is not None and not (step % (self.batches_per_epoch-1)):
+                    lr = optimizer_to_use.param_groups[0]["lr"]
                     self.lr_scheduler.step(score)
+                    lr_new = optimizer_to_use.param_groups[0]["lr"]
+                    if lr != lr_new:
+                        print(f'Updated lr from {lr} to {lr_new}')
             # Iteration-based scheduler(s)
             else:
                 self.lr_scheduler.step()
@@ -856,3 +894,58 @@ class MultitaskTrainer(object):
     def _check_metrics(self):
         assert isinstance(self.config["metrics_config"]["task_metrics"], list)
         assert isinstance(self.config["metrics_config"]["aggregate_metric_fns"], list)
+
+
+    @torch.no_grad()
+    def _calculate_valid_losses(self, model, payloads, split, max_examples=0):
+        """
+        Calculate the loss for the valid split
+        NOTE: currently only supports use all samples
+        """
+        # Error checking
+        assert split != "train"
+        if split is None:
+            msg = (
+                "MeTaL does not currently support calculating the loss for "
+                "multiple non-train splits"
+            )
+            raise NotImplementedError(msg)
+        elif split == "test":
+            msg = "MeTaL does not support calculating loss on the test set."
+            warnings.warn(msg)
+            return {}
+        # Calculate task-specific losses
+        task_losses = defaultdict(float)
+        task_examples = defaultdict(float)
+        total_examples = 0
+        # WARNING: For calculating valid loss, we simply use a proportional scheduler.
+        # Note that if max_examples > 0, some tasks may be underrepresented in the first
+        # max_examples examples.
+        task_scheduler = ProportionalScheduler(model, payloads, split)
+        for batch, payload_name, labels_to_tasks in task_scheduler.get_batches(payloads, split):
+            _, Ys = batch
+            batch_size = len(next(iter(Ys.values())))
+            loss_dict, count_dict = model.calculate_loss(
+                    *batch, payload_name, labels_to_tasks
+                )
+            for task_name, loss in loss_dict.items():
+                if count_dict[task_name]:
+                    task_losses[task_name] += loss.item() * count_dict[task_name]
+                    task_examples[task_name] += count_dict[task_name]
+            total_examples += batch_size
+            if max_examples > 0 and total_examples >= max_examples:
+                break
+        # Aggregate losses and store in dictionary
+        metrics_dict = {}
+        for task_name in self.task_names:
+            full_name = f"{task_name}/{split}/all/loss"
+            if task_examples[task_name] > 0:
+                metrics_dict[full_name] = (
+                    task_losses[task_name] / task_examples[task_name]
+                )
+            else:
+                metrics_dict[full_name] = np.nan
+        metrics_dict[f"model/{split}/all/loss"] = sum(task_losses.values()) / sum(
+            task_examples.values()
+        )
+        return metrics_dict
