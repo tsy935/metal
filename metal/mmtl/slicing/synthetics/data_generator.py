@@ -9,7 +9,7 @@ def get_circle_mask(X, center, radius):
     return mask.astype(np.bool)
 
 
-def generate_data(N, decision_boundary_flip):
+def generate_data(N, label_flips):
     """ Generates data in numpy form.
 
     Returns: (
@@ -24,7 +24,8 @@ def generate_data(N, decision_boundary_flip):
     Y = (X[:, 0] > X[:, 1] + 0.25).astype(int) + 1
 
     # abberation in decision boundary
-    Y[decision_boundary_flip(X)] = 1
+    for mask_fn, label in label_flips.items():
+        Y[mask_fn(X)] = label
 
     uid_lists, Xs, Ys = split_data(uids, X, Y, splits=[0.5, 0.25, 0.25], shuffle=True)
     return uid_lists, Xs, Ys

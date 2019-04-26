@@ -133,6 +133,8 @@ class MetalModel(nn.Module):
         count_dict = {}  # Stores the number of active examples by task
 
         for label_name, task_name in labels_to_tasks.items():
+            if task_name is None:
+                continue
             loss_name = f"{task_name}/{payload_name}/{label_name}/loss"
             Y = Ys[label_name]
             out = outputs[task_name]
