@@ -7,7 +7,7 @@ from torch.nn import functional as F
 from metal.end_model import IdentityModule
 from metal.mmtl.metal_model import MetalModel
 from metal.mmtl.modules import unwrap_module
-from metal.utils import move_to_device, recursive_merge_dicts, set_seed
+from metal.utils import move_to_device
 
 
 def validate_slice_tasks(tasks):
