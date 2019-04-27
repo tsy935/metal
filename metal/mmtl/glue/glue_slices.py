@@ -38,6 +38,14 @@ def more_people(dataset, idx):
     return people > 1
 
 
+def has_date(dataset, idx):
+    sent1 = dataset.sentences[idx][0]
+    sent2 = dataset.sentences[idx][1]
+    date_in_s1 = any([X.label_ == "DATE" for X in nlp(sent1).ents])
+    date_in_s2 = any([X.label_ == "DATE" for X in nlp(sent2).ents])
+    return date_in_s1 or date_in_s2
+
+
 def entity_secondonly(dataset, idx):
     sent1 = dataset.sentences[idx][0]
     sent2 = nlp(dataset.sentences[idx][1])
