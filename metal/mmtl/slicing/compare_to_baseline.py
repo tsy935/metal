@@ -1,87 +1,39 @@
+"""
+Creates slice/baseline/ablation model, trains, and evaluates on
+corresponding slice prediction labelsets.
+
+python compare_to_baseline.py --seed 1 --tasks RTE --slice_dict '{"RTE": ["dash_semicolon", "more_people", "BASE"]}' --model_type naive --n_epochs 1
+"""
+
 import argparse
 import copy
 import json
+from pprint import pprint
 
 import numpy as np
 
 from metal.mmtl.glue.glue_tasks import create_glue_tasks_payloads, task_defaults
 from metal.mmtl.metal_model import MetalModel, model_defaults
 from metal.mmtl.slicing.slice_model import SliceModel
-from metal.mmtl.slicing.slicing_tasks import convert_to_slicing_tasks
+from metal.mmtl.slicing.tasks import convert_to_slicing_tasks
 from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
 from metal.utils import add_flags_from_config, recursive_merge_dicts
 
+# Overwrite defaults
+task_defaults["attention"] = False
+model_defaults["verbose"] = False
+trainer_defaults["writer"] = "tensorboard"
 
-"""
-python compare_to_baseline.py --seed 1 --tasks RTE --slice_dict '{"RTE": ["dash_semicolon", "more_people", "BASE"]}'
-"""
-
-
-def get_baseline_scores(tasks, seed, eval_payload):
-    # Baseline Model
-    task_name = tasks[0].name
-    model = MetalModel(tasks, seed=seed, verbose=False)
-    trainer = MultitaskTrainer(seed=seed)
-    trainer.train_model(
-        model,
-        payloads,
-        checkpoint_metric="{}/{}/{}_gold/accuracy".format(
-            task_name, eval_payload.name, task_name
-        ),
-        checkpoint_metric_mode="max",
-        checkoint_best=True,
-        writer="tensorboard",
-        optimizer="adamax",
-        lr=5e-5,
-        l2=1e-3,
-        log_every=0.1,
-        score_every=0.1,
-        n_epochs=10,
-        progress_bar=True,
-        checkpoint_best=True,
-        checkpoint_cleanup=False,
-    )
-    return model.score(eval_payload)
-
-
-def get_model_scores(tasks_slice, payloads_slice, seed, eval_payload):
-    task_name = tasks_slice[0].name
-    slicing_tasks = convert_to_slicing_tasks(tasks_slice)
-    slice_model = SliceModel(slicing_tasks, seed=seed, verbose=False)
-    task_metrics = []
-    prefix = "{}/{}_".format(task_name, task_name)
-    for p_name, metric in [("train", "loss"), ("valid", "accuracy")]:
-        for label_name in eval_payload.labels_to_tasks.keys():
-            task_metrics += [prefix + p_name + "/{}/{}".format(label_name, metric)]
-    print(task_metrics)
-    trainer = MultitaskTrainer(seed=seed)
-    trainer.train_model(
-        slice_model,
-        payloads_slice,
-        task_metrics=task_metrics,
-        checkpoint_metric="{}/{}/{}_gold/accuracy".format(
-            task_name, eval_payload.name, task_name
-        ),
-        checkpoint_metric_mode="max",
-        checkoint_best=True,
-        writer="tensorboard",
-        optimizer="adamax",
-        lr=1e-5,
-        l2=1e-3,
-        log_every=0.1,
-        score_every=0.1,
-        n_epochs=20,
-        progress_bar=True,
-        checkpoint_best=True,
-        checkpoint_cleanup=False,
-    )
-    return slice_model.score(eval_payload)
-
+# Model configs
+model_configs = {
+    "naive": {"model_class": MetalModel, "use_slice_heads": False},
+    "hard_param": {"model_class": MetalModel, "use_slice_heads": True},
+    "soft_param": {"model_class": SliceModel, "use_slice_heads": True},
+}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Compare specified model with MetalModel on single tasks",
-        add_help=False,
+        description="Launch slicing models/baselines on GLUE tasks", add_help=False
     )
     parser.add_argument(
         "--seed",
@@ -90,8 +42,13 @@ if __name__ == "__main__":
         help="A single seed to use for trainer, model, and task configs",
     )
     parser.add_argument(
-        "--model_type", type=str, default="metal", help="Baseline model type"
+        "--model_type",
+        type=str,
+        required=True,
+        choices=["naive", "hard_param", "soft_param"],
+        help="Model to run and evaluate",
     )
+
     parser = add_flags_from_config(parser, trainer_defaults)
     parser = add_flags_from_config(parser, model_defaults)
     parser = add_flags_from_config(parser, task_defaults)
@@ -107,32 +64,47 @@ if __name__ == "__main__":
 
     task_names = args.tasks.split(",")
     assert len(task_names) == 1
-    task_name = task_names[0]
+    base_task_name = task_names[0]
+
+    # Default name for log directory to task names
+    if args.run_name is None:
+        run_name = f"{args.model_type}_{args.tasks}"
+        trainer_config["writer_config"]["run_name"] = run_name
+
+    # Get model configs
+    config = model_configs[args.model_type]
+    use_slice_heads = config["use_slice_heads"]
+    model_class = config["model_class"]
 
     # Create tasks and payloads
-    task_config["slice_dict"] = None
-    task_config["attention"] = False
-    tasks, payloads = create_glue_tasks_payloads(task_names, **task_config)
-
-    # Create slicing tasks and payloads
     slice_dict = json.loads(args.slice_dict)
-    task_config.update({"slice_dict": slice_dict})
-    task_config["attention"] = None
-    tasks_slice, payloads_slice = create_glue_tasks_payloads(task_names, **task_config)
-
-    eval_payload = copy.deepcopy(payloads_slice[1])
-
-    # NOTE: we need to retarget slices to the original RTE head
-    for label_name in [t.name for t in tasks_slice[1:]]:
-        eval_payload.retarget_labelset(label_name, task_name)
-
-    if args.model_type.upper() == "METAL":
-        baseline_scores = get_baseline_scores(tasks, args.seed, eval_payload)
+    if use_slice_heads:
+        task_config.update({"slice_dict": slice_dict})
     else:
-        raise NotImplementedError
+        task_config.update({"slice_dict": None})
 
-    model_scores = get_model_scores(
-        tasks_slice, payloads_slice, args.seed, eval_payload
+    tasks, payloads = create_glue_tasks_payloads(task_names, **task_config)
+    if use_slice_heads:
+        tasks = convert_to_slicing_tasks(tasks)
+
+    # Initialize and train model
+    model = model_class(tasks, **model_config)
+    trainer = MultitaskTrainer(**trainer_config)
+    trainer.train_model(model, payloads)
+
+    # Create evaluation payload with test_slices -> primary task head
+    task_config.update({"slice_dict": slice_dict})
+    slice_tasks, slice_payloads = create_glue_tasks_payloads(task_names, **task_config)
+    eval_payload = slice_payloads[1]
+    pred_labelsets = [
+        labelset
+        for labelset in eval_payload.labels_to_tasks.keys()
+        if "pred" in labelset
+    ]
+    eval_payload.remap_labelsets(
+        {pred_labelset: base_task_name for pred_labelset in pred_labelsets}
     )
-    print(baseline_scores)
-    print(model_scores)
+    slice_metrics = model.score(eval_payload)
+    pprint(slice_metrics)
+    if trainer.writer:
+        trainer.writer.write_metrics(slice_metrics, "slice_metrics.json")
