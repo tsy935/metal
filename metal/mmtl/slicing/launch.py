@@ -22,6 +22,7 @@ from metal.utils import add_flags_from_config, recursive_merge_dicts
 # Overwrite defaults
 task_defaults["attention"] = False
 model_defaults["verbose"] = False
+model_defaults["delete_heads"] = True  # mainly load the base representation weights
 trainer_defaults["writer"] = "tensorboard"
 
 # Model configs
@@ -89,6 +90,7 @@ if __name__ == "__main__":
 
     # Initialize and train model
     model = model_class(tasks, **model_config)
+
     trainer = MultitaskTrainer(**trainer_config)
     trainer.train_model(model, payloads)
 
