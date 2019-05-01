@@ -24,6 +24,9 @@ task_defaults["attention"] = False
 model_defaults["verbose"] = False
 model_defaults["delete_heads"] = True  # mainly load the base representation weights
 trainer_defaults["writer"] = "tensorboard"
+trainer_defaults["metrics_config"][
+    "test_split"
+] = "valid"  # for GLUE, don't have real test set
 
 # Model configs
 model_configs = {
@@ -101,7 +104,7 @@ if __name__ == "__main__":
     pred_labelsets = [
         labelset
         for labelset in eval_payload.labels_to_tasks.keys()
-        if "pred" in labelset
+        if "pred" in labelset or "_gold" in labelset
     ]
     eval_payload.remap_labelsets(
         {pred_labelset: base_task_name for pred_labelset in pred_labelsets}
