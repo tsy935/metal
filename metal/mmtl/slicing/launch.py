@@ -106,6 +106,8 @@ if __name__ == "__main__":
     eval_payload.remap_labelsets(
         {pred_labelset: base_task_name for pred_labelset in pred_labelsets}
     )
+
+    model.eval()
     slice_metrics = model.score(eval_payload)
     pprint(slice_metrics)
     if trainer.writer:
