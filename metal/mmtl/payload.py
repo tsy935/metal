@@ -78,7 +78,7 @@ class Payload(object):
                 f"Removed label_set {label_name} for task {task_name} from payload {self.name}."
             )
 
-    def retarget_labelset(self, label_name, task_name, verbose=True):
+    def _retarget_labelset(self, label_name, task_name, verbose=True):
         """Retargets a labelset to the specified task name (in labels_to_tasks). """
 
         old_task = self.labels_to_tasks[label_name]
@@ -89,3 +89,20 @@ class Payload(object):
                     f"labelset '{label_name}' -> task '{self.labels_to_tasks[label_name]}' "
                     f"(originally, {old_task})."
                 )
+
+    def remap_labelsets(self, labels_to_tasks):
+        """ Remaps payload.labels_to_tasks based on specified dictionary. All other
+            defaults to `labelset` -> `None`.
+
+        Args:
+            labels_to_heads: if specified, remaps (in-place) labelsets to specified
+                task heads.
+
+        """
+        test_labelsets = self.labels_to_tasks.keys()
+        for label_name in test_labelsets:
+            if label_name in labels_to_tasks:
+                new_task = labels_to_tasks[label_name]
+                self._retarget_labelset(label_name, new_task)
+            else:
+                self._retarget_labelset(label_name, None)

@@ -254,8 +254,6 @@ class MultitaskTrainer(object):
 
                 if freezed_tasks != [] and batch_num == 0:
                     print(f"Freezing {freezed_tasks}")
-                    for name, param in model.named_parameters():
-                        print(name, param.requires_grad)
                     for task_name in freezed_tasks:
                         if task_name in model.input_modules:
                             for p in model.input_modules[task_name].parameters():
@@ -269,8 +267,6 @@ class MultitaskTrainer(object):
                         if task_name in model.head_modules:
                             for p in model.head_modules[task_name].parameters():
                                 p.requires_grad = False
-                    for name, param in model.named_parameters():
-                        print(name, param.requires_grad)
 
                 if batch_num == 0:
                     print(f"Training tasks {labels_to_tasks}")
@@ -365,6 +361,7 @@ class MultitaskTrainer(object):
         # Calculate metrics for all splits if test_split=None
         test_split = self.config["metrics_config"]["test_split"]
         metrics_dict = self.calculate_metrics(model, payloads, split=test_split)
+        metrics_dict.update(self.calculate_metrics(model, payloads, split="train"))
         if self.config["verbose"]:
             pprint(metrics_dict)
 
@@ -508,13 +505,15 @@ class MultitaskTrainer(object):
                 splits = set(p.split for p in payloads) - set(["train"])
             else:
                 splits = [split]
+
             for loss_split in splits:
-                loss_dict = self._calculate_valid_losses(
-                    model, payloads, loss_split, max_examples=max_examples
-                )
-                for loss_name, loss_value in loss_dict.items():
-                    if loss_name in target_loss_metrics:
-                        metrics_dict[loss_name] = loss_value
+                if loss_split != "train":
+                    loss_dict = self._calculate_valid_losses(
+                        model, payloads, loss_split, max_examples=max_examples
+                    )
+                    for loss_name, loss_value in loss_dict.items():
+                        if loss_name in target_loss_metrics:
+                            metrics_dict[loss_name] = loss_value
 
         # Calculate metrics from Scorers
         for payload in payloads:

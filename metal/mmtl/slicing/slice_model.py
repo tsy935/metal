@@ -77,7 +77,7 @@ class SliceModel(MetalModel):
         * A single base task + an arbitrary number of slice tasks (slice_head_type != None)
     """
 
-    def __init__(self, tasks, **kwargs):
+    def __init__(self, tasks, attention_with_rep=False, **kwargs):
         validate_slice_tasks(tasks)
         super().__init__(tasks, **kwargs)
         self.base_task = [
@@ -89,6 +89,14 @@ class SliceModel(MetalModel):
         self.slice_ind_tasks = {
             name: t for name, t in self.task_map.items() if t.slice_head_type == "ind"
         }
+
+        neck_dim = self.base_task.head_module.module.in_features
+        num_slices = len(self.slice_ind_tasks)
+
+        # show the body representation to the attention layer
+        self.attention_with_rep = attention_with_rep
+        if self.attention_with_rep:
+            self.attention_layer = nn.Linear(neck_dim + num_slices, num_slices)
 
     def forward_body(self, X):
         """ Makes a forward pass through the "body" of the network
@@ -111,7 +119,7 @@ class SliceModel(MetalModel):
 
         return {t: self.head_modules[t].module(body) for t in task_names}
 
-    def forward_attention_logits(self, slice_ind_heads, slice_task_names):
+    def forward_attention_logits(self, body, slice_ind_heads, slice_task_names):
         """ Computes unnomralized slice_head attention weights based on
         `in slice` indicators """
 
@@ -123,7 +131,12 @@ class SliceModel(MetalModel):
 
         # A_weights is the [batch_size, num_slices] unormalized Tensor where
         # more positive values indicate more likely to be in the slice
-        A_weights = slice_inds
+        if self.attention_with_rep:
+            attention_input = torch.cat((slice_inds, body["data"]), dim=1)
+            A_weights = self.attention_layer(attention_input)
+        else:
+            A_weights = slice_inds
+
         return A_weights
 
     def forward(self, X, task_names):
@@ -146,7 +159,10 @@ class SliceModel(MetalModel):
 
         # [batch_size, num_slices] unnormalized attention weights.
         # we then normalize the weights across all heads
-        A_weights = self.forward_attention_logits(slice_ind_heads, slice_ind_names)
+        # A_weights = self.forward_attention_logits(slice_ind_heads, slice_ind_names)
+        A_weights = self.forward_attention_logits(
+            body, slice_ind_heads, slice_ind_names
+        )
         A = F.softmax(A_weights, dim=1)
 
         # slice_weights is the [num_slices, body_dim] concatenated tensor
@@ -187,7 +203,9 @@ class SliceModel(MetalModel):
 
         body = self.forward_body(X)
         slice_ind_heads = self.forward_heads(body, slice_ind_names)
-        A_weights = self.forward_attention_logits(slice_ind_heads, slice_ind_names)
+        A_weights = self.forward_attention_logits(
+            body, slice_ind_heads, slice_ind_names
+        )
         return A_weights
 
     def attention_with_gold(self, payload):
