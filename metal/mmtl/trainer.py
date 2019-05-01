@@ -1,11 +1,11 @@
 import copy
 import os
+import pickle
 import random
 import warnings
 from collections import defaultdict
 from pprint import pprint
 from shutil import copy2
-import pickle
 
 import dill
 import numpy as np
@@ -170,7 +170,7 @@ class MultitaskTrainer(object):
             self.config["seed"] = np.random.randint(1e6)
         set_seed(self.config["seed"])
 
-    def train_model(self, model, payloads, **kwargs):
+    def train_model(self, model, payloads, train_schedule_plan=None, **kwargs):
         # NOTE: misses="insert" so we can log extra metadata (e.g. num_parameters)
         # and eventually write to disk.
         self.config = recursive_merge_dicts(self.config, kwargs, misses="insert")
@@ -204,13 +204,14 @@ class MultitaskTrainer(object):
         self._set_lr_scheduler(model)  # TODO: Support more detailed training schedules
         self._set_task_scheduler(model, payloads)
 
-        # Record config 
+        # Record config
         if self.writer:
             self.writer.write_config(self.config)
 
         # Train the model
         # TODO: Allow other ways to train besides 1 epoch of all datasets
         model.train()
+
         # Dict metrics_hist contains the most recently recorded value of all metrics
         self.metrics_hist = {}
         self._reset_losses()
@@ -221,12 +222,59 @@ class MultitaskTrainer(object):
                 total=self.batches_per_epoch,
                 disable=(not progress_bar),
             )
-            for batch_num, (batch, payload_name, labels_to_tasks) in t:
+            for batch_num, (batch, payload_name, labels_to_tasks_) in t:
                 # NOTE: actual batch_size may not equal config's target batch_size,
                 # for example due to orphan batches. We base batch size off of Y instead
                 # of X because we know Y will contain tensors, whereas X can be of any
                 # format the input_module accepts, including tuples of tensors, etc.
                 _, Ys = batch
+
+                # Swith the tasks to train based on train_schedule_plan and epoch
+                labels_to_tasks = labels_to_tasks_.copy()
+
+                task_to_train = None
+                freezed_tasks = []
+                if train_schedule_plan:
+                    _max_epoch = self.config["n_epochs"] + 1
+                    for max_epoch, tasks in train_schedule_plan["plan"].items():
+                        if max_epoch > epoch and max_epoch < _max_epoch:
+                            _max_epoch = max_epoch
+                            task_to_train = tasks
+                        if train_schedule_plan["freeze"] and max_epoch < epoch:
+                            for task in tasks:
+                                freezed_tasks.append(labels_to_tasks[task])
+
+                if task_to_train:
+                    del_keys = []
+                    for key in labels_to_tasks.keys():
+                        if key not in task_to_train:
+                            del_keys.append(key)
+                    for key in del_keys:
+                        del labels_to_tasks[key]
+
+                if freezed_tasks != [] and batch_num == 0:
+                    print(f"Freezing {freezed_tasks}")
+                    for name, param in model.named_parameters():
+                        print(name, param.requires_grad)
+                    for task_name in freezed_tasks:
+                        if task_name in model.input_modules:
+                            for p in model.input_modules[task_name].parameters():
+                                p.requires_grad = False
+                        if task_name in model.middle_modules:
+                            for p in model.middle_modules[task_name].parameters():
+                                p.requires_grad = False
+                        if task_name in model.attention_modules:
+                            for p in model.attention_modules[task_name].parameters():
+                                p.requires_grad = False
+                        if task_name in model.head_modules:
+                            for p in model.head_modules[task_name].parameters():
+                                p.requires_grad = False
+                    for name, param in model.named_parameters():
+                        print(name, param.requires_grad)
+
+                if batch_num == 0:
+                    print(f"Training tasks {labels_to_tasks}")
+
                 batch_size = len(next(iter(Ys.values())))
                 batch_id = epoch * self.batches_per_epoch + batch_num
 
@@ -799,12 +847,12 @@ class MultitaskTrainer(object):
                 if min_lr and optimizer_to_use.param_groups[0]["lr"] < min_lr:
                     optimizer_to_use.param_groups[0]["lr"] = min_lr
                 # Only updating every epoch!
-                if score is not None and not (step % (self.batches_per_epoch-1)):
+                if score is not None and not (step % (self.batches_per_epoch - 1)):
                     lr = optimizer_to_use.param_groups[0]["lr"]
                     self.lr_scheduler.step(score)
                     lr_new = optimizer_to_use.param_groups[0]["lr"]
                     if lr != lr_new:
-                        print(f'Updated lr from {lr} to {lr_new}')
+                        print(f"Updated lr from {lr} to {lr_new}")
             # Iteration-based scheduler(s)
             else:
                 self.lr_scheduler.step()
@@ -895,7 +943,6 @@ class MultitaskTrainer(object):
         assert isinstance(self.config["metrics_config"]["task_metrics"], list)
         assert isinstance(self.config["metrics_config"]["aggregate_metric_fns"], list)
 
-
     @torch.no_grad()
     def _calculate_valid_losses(self, model, payloads, split, max_examples=0):
         """
@@ -922,12 +969,14 @@ class MultitaskTrainer(object):
         # Note that if max_examples > 0, some tasks may be underrepresented in the first
         # max_examples examples.
         task_scheduler = ProportionalScheduler(model, payloads, split)
-        for batch, payload_name, labels_to_tasks in task_scheduler.get_batches(payloads, split):
+        for batch, payload_name, labels_to_tasks in task_scheduler.get_batches(
+            payloads, split
+        ):
             _, Ys = batch
             batch_size = len(next(iter(Ys.values())))
             loss_dict, count_dict = model.calculate_loss(
-                    *batch, payload_name, labels_to_tasks
-                )
+                *batch, payload_name, labels_to_tasks
+            )
             for task_name, loss in loss_dict.items():
                 if count_dict[task_name]:
                     task_losses[task_name] += loss.item() * count_dict[task_name]
