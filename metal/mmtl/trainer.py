@@ -240,20 +240,34 @@ class MultitaskTrainer(object):
                         if max_epoch > epoch and max_epoch < _max_epoch:
                             _max_epoch = max_epoch
                             task_to_train = tasks
-                        if train_schedule_plan["freeze"] and max_epoch < epoch:
+                        if (
+                            "freeze" in train_schedule_plan
+                            and train_schedule_plan["freeze"] in ["all", "body"]
+                            and max_epoch < epoch
+                        ):
                             for task in tasks:
-                                freezed_tasks.append(labels_to_tasks[task])
+                                freezed_tasks.append(task)
+                    if (
+                        "freeze" in train_schedule_plan
+                        and train_schedule_plan["freeze"] == "all"
+                    ):
+                        for task in freezed_tasks:
+                            if task in task_to_train:
+                                print(
+                                    f"Remove {task} from task_to_train since it's freezed."
+                                )
+                                task_to_train.remove(task)
 
                 if task_to_train:
                     del_keys = []
                     for key in labels_to_tasks.keys():
-                        if key not in task_to_train:
+                        if labels_to_tasks[key] not in task_to_train:
                             del_keys.append(key)
                     for key in del_keys:
                         del labels_to_tasks[key]
 
                 if freezed_tasks != [] and batch_num == 0:
-                    print(f"Freezing {freezed_tasks}")
+                    print(f"Freezing {freezed_tasks} {train_schedule_plan['freeze']}")
                     for task_name in freezed_tasks:
                         if task_name in model.input_modules:
                             for p in model.input_modules[task_name].parameters():
@@ -264,7 +278,10 @@ class MultitaskTrainer(object):
                         if task_name in model.attention_modules:
                             for p in model.attention_modules[task_name].parameters():
                                 p.requires_grad = False
-                        if task_name in model.head_modules:
+                        if (
+                            task_name in model.head_modules
+                            and train_schedule_plan["freeze"] == "all"
+                        ):
                             for p in model.head_modules[task_name].parameters():
                                 p.requires_grad = False
 
