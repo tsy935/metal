@@ -232,11 +232,12 @@ class MultitaskTrainer(object):
                 # Swith the tasks to train based on train_schedule_plan and epoch
                 labels_to_tasks = labels_to_tasks_.copy()
 
-                task_to_train = None
+                task_to_train = list(labels_to_tasks.values())
                 freezed_tasks = []
                 if train_schedule_plan:
                     _max_epoch = self.config["n_epochs"] + 1
                     for max_epoch, tasks in train_schedule_plan["plan"].items():
+                        max_epoch = int(max_epoch)
                         if max_epoch > epoch and max_epoch < _max_epoch:
                             _max_epoch = max_epoch
                             task_to_train = tasks
@@ -253,9 +254,6 @@ class MultitaskTrainer(object):
                     ):
                         for task in freezed_tasks:
                             if task in task_to_train:
-                                print(
-                                    f"Remove {task} from task_to_train since it's freezed."
-                                )
                                 task_to_train.remove(task)
 
                 if task_to_train:
