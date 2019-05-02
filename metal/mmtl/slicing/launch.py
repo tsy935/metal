@@ -85,7 +85,7 @@ if __name__ == "__main__":
     model_class = config["model_class"]
 
     # Create tasks and payloads
-    slice_dict = json.loads(args.slice_dict)
+    slice_dict = json.loads(args.slice_dict) if args.slice_dict else {}
     if use_slice_heads:
         task_config.update({"slice_dict": slice_dict})
     else:
