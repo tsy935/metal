@@ -16,6 +16,7 @@ def create_tasks(
     slice_names=[],
     slice_weights={},
     create_ind=True,
+    create_preds=True,
     create_base=True,
     verbose=False,
 ):
@@ -35,13 +36,14 @@ def create_tasks(
             loss_multiplier = slice_weights[slice_name]
         else:
             loss_multiplier = 1.0
-        slice_pred_task = create_slice_task(
-            task,
-            f"{task_name}:{slice_name}:pred",
-            "pred",
-            loss_multiplier=loss_multiplier,
-        )
-        tasks.append(slice_pred_task)
+        if create_preds:
+            slice_pred_task = create_slice_task(
+                task,
+                f"{task_name}:{slice_name}:pred",
+                "pred",
+                loss_multiplier=loss_multiplier,
+            )
+            tasks.append(slice_pred_task)
 
         if create_ind:
             slice_ind_task = create_slice_task(
@@ -68,6 +70,7 @@ def create_payloads(
     slice_funcs={},
     SPLITS=["train", "valid", "test"],
     create_ind=True,
+    create_preds=True,
     create_base=True,
     verbose=False,
 ):
@@ -82,7 +85,9 @@ def create_payloads(
         Y_dict = {"labelset_gold": torch.Tensor(Ys[i])} if create_base else {}
 
         if slice_funcs:
-            slice_labels = generate_slice_labels(Xs[i], Ys[i], slice_funcs, create_ind)
+            slice_labels = generate_slice_labels(
+                Xs[i], Ys[i], slice_funcs, create_ind, create_preds
+            )
 
             # labelset_name -> {"ind": [1,2,1,2,2], "pred": [0,1,0,2,2]}
             for slice_name, slice_label in slice_labels.items():

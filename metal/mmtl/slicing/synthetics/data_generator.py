@@ -31,7 +31,7 @@ def generate_data(N, label_flips):
     return uid_lists, Xs, Ys
 
 
-def generate_slice_labels(X, Y, slice_funcs, create_ind):
+def generate_slice_labels(X, Y, slice_funcs, create_ind, create_preds):
     """
     Args:
         X: [N x D] data
@@ -58,8 +58,9 @@ def generate_slice_labels(X, Y, slice_funcs, create_ind):
         categorical_indicator = convert_labels(
             slice_mask.astype(np.int), "onezero", "categorical"
         )
-
-        slice_labels[slice_name] = {"pred": Y_gt}
+        slice_labels[slice_name] = {}
+        if create_preds:
+            slice_labels[slice_name].update({"pred": Y_gt})
         if create_ind:
             slice_labels[slice_name].update({"ind": categorical_indicator})
 
