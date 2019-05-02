@@ -14,6 +14,8 @@ model_defaults = {
     "verbose": True,
     "fp16": False,
     "model_weights": None,  # the path to a saved checkpoint to initialize with
+    # whether to delete model source model head weights while loading existing weights
+    "delete_heads": False,
 }
 
 
@@ -196,7 +198,7 @@ class MetalModel(nn.Module):
         """Updates self.config with the values in a given update dictionary."""
         self.config = recursive_merge_dicts(self.config, update_dict)
 
-    def load_weights(self, model_path):
+    def load_weights(self, model_path, delete_heads=False):
         """Load model weights from checkpoint."""
         if self.config["device"] >= 0:
             device = torch.device(f"cuda:{self.config['device']}")
@@ -206,9 +208,25 @@ class MetalModel(nn.Module):
             self.load_state_dict(torch.load(model_path, map_location=device)["model"])
         except RuntimeError:
             print("Your destination state dict has different keys for the update key.")
-            self.load_state_dict(
-                torch.load(model_path, map_location=device)["model"], strict=False
-            )
+            try:
+                source_state_dict = torch.load(model_path, map_location=device)["model"]
+                self.load_state_dict(source_state_dict, strict=False)
+
+            except RuntimeError:
+                # use the slicing hack to delete existing heads
+                if self.config["delete_heads"]:
+                    warnings.warn(
+                        "SLICING HACK: Attemping to remove heads in source state dict."
+                        "You MUST fine-tune the model to recover original performance."
+                    )
+
+                    for module in list(source_state_dict.keys()):
+                        if "head_modules" in module:
+                            msg = f"Deleting {module} from loaded weights"
+                            warnings.warn(msg)
+                            del source_state_dict[module]
+
+                    self.load_state_dict(source_state_dict, strict=False)
 
     def save_weights(self, model_path):
         """Saves weight in checkpoint directory"""
