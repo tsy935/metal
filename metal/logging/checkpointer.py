@@ -35,7 +35,9 @@ class Checkpointer(object):
                 f"checkpoint_runway={self.checkpoint_runway} iterations."
             )
 
-    def checkpoint(self, metrics_dict, iteration, model, optimizer, lr_scheduler):
+    def checkpoint(
+        self, metrics_dict, iteration, model, optimizer, lr_scheduler, force_save=False
+    ):
         # Return early if checkpoint_runway has not been met
         if self.checkpoint_runway:
             if iteration < self.checkpoint_runway:
@@ -43,7 +45,7 @@ class Checkpointer(object):
             elif iteration == self.checkpoint_runway:
                 print("Checkpoint runway has been met. Checkpointing will now occur.")
 
-        if (
+        if force_save or (
             self.checkpoint_every
             and iteration > 0
             and iteration % self.checkpoint_every == 0
