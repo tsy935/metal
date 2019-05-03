@@ -23,6 +23,10 @@ from metal.utils import add_flags_from_config, recursive_merge_dicts
 task_defaults["attention"] = False
 model_defaults["verbose"] = False
 model_defaults["delete_heads"] = True  # mainly load the base representation weights
+
+# by default, log last epoch (not best)
+trainer_defaults["checkpoint"] = True
+trainer_defaults["checkpoint_config"]["checkpoint_best"] = False
 trainer_defaults["writer"] = "tensorboard"
 trainer_defaults["metrics_config"][
     "test_split"
@@ -81,7 +85,7 @@ if __name__ == "__main__":
     model_class = config["model_class"]
 
     # Create tasks and payloads
-    slice_dict = json.loads(args.slice_dict)
+    slice_dict = json.loads(args.slice_dict) if args.slice_dict else {}
     if use_slice_heads:
         task_config.update({"slice_dict": slice_dict})
     else:
