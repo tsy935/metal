@@ -16,6 +16,13 @@ def BASE(dataset, idx):
     return True
 
 
+def get_both_sentences(dataset, idx):
+    if len(dataset.sentences[idx]) > 1:
+        return dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    else:
+        return dataset.sentences[idx][0]
+
+
 def more_people(dataset, idx):
     people = 0
     sentence = dataset.sentences[idx][0].split()
@@ -56,7 +63,7 @@ def long_premise(dataset, idx, thresh=100):
 
 def has_wh_words(dataset, idx):
     words = ["who", "what", "where", "when", "why", "how"]
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     return any([x in both_sentences for x in words])
 
 
@@ -67,19 +74,19 @@ def has_coordinating_conjunction_hypothesis(dataset, idx):
 
 
 def has_but(dataset, idx):
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     return "but" in both_sentences
 
 
 def has_multiple_articles(dataset, idx):
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     multiple_a = sum([int(x == "a") for x in both_sentences.split()]) > 1
     multiple_the = sum([int(x == "a") for x in both_sentences.split()]) > 1
     return multiple_a or multiple_the
 
 
 def has_numerical_date(dataset, idx):
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     doc = nlp(both_sentences)
     return any(
         [x_ent.label_ == "DATE" and x.like_num for x, x_ent in zip(doc, doc.ents)]
@@ -88,13 +95,13 @@ def has_numerical_date(dataset, idx):
 
 def is_quantification(dataset, idx):
     words = ["all", "some", "none"]
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     return any([p in both_sentences for p in words])
 
 
 def is_spatial_expression(dataset, idx):
     words = ["to the left of", "to the right of"]
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     return any([p in both_sentences for p in words])
 
 
@@ -106,7 +113,7 @@ def is_quantification_hypothesis(dataset, idx):
 
 def is_comparative(dataset, idx):
     comparative_words = ["more", "less", "better", "worse", "bigger", "smaller"]
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     return any([p in both_sentences for p in comparative_words])
 
 
@@ -127,7 +134,7 @@ def has_non_spatial_preposition(dataset, idx):
         "with",
         "without",
     ]
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     return any([p in both_sentences for p in non_spatial_prepositions])
 
 
@@ -164,19 +171,19 @@ def has_spatial_preposition(dataset, idx):
         "within",
         "with" "without",
     ]
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     return any([p in both_sentences for p in spatial_prepositions])
 
 
 def has_temporal_preposition(dataset, idx):
     temporal_prepositions = ["after", "before", "past"]
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     return any([p in both_sentences for p in temporal_prepositions])
 
 
 def has_possessive_preposition(dataset, idx):
     possessive_prepositions = ["inside of", "with", "within"]
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     return any([p in both_sentences for p in possessive_prepositions])
 
 
@@ -205,7 +212,7 @@ def common_negation(dataset, idx):
         "can't",
         "don't",
     ]
-    both_sentences = dataset.sentences[idx][0] + " " + dataset.sentences[idx][1]
+    both_sentences = get_both_sentences(dataset, idx)
     return any([x in negation_words for x in both_sentences.split()])
 
 
