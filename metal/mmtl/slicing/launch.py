@@ -14,7 +14,7 @@ import numpy as np
 
 from metal.mmtl.glue.glue_tasks import create_glue_tasks_payloads, task_defaults
 from metal.mmtl.metal_model import MetalModel, model_defaults
-from metal.mmtl.slicing.slice_model import SliceModel
+from metal.mmtl.slicing.slice_model import SliceModel, SliceRepModel
 from metal.mmtl.slicing.tasks import convert_to_slicing_tasks
 from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
 from metal.utils import add_flags_from_config, recursive_merge_dicts
@@ -34,9 +34,19 @@ trainer_defaults["metrics_config"][
 
 # Model configs
 model_configs = {
-    "naive": {"model_class": MetalModel, "use_slice_heads": False},
-    "hard_param": {"model_class": MetalModel, "use_slice_heads": True},
-    "soft_param": {"model_class": SliceModel, "use_slice_heads": True},
+    "naive": {"model_class": MetalModel, "active_slice_heads": None},
+    "hard_param": {
+        "model_class": MetalModel,
+        "active_slice_heads": {"pred": True, "ind": False},
+    },
+    "soft_param": {
+        "model_class": SliceModel,
+        "active_slice_heads": {"pred": True, "ind": True},
+    },
+    "soft_param_rep": {
+        "model_class": SliceRepModel,
+        "active_slice_heads": {"pred": False, "ind": True},
+    },
 }
 
 if __name__ == "__main__":
@@ -53,7 +63,7 @@ if __name__ == "__main__":
         "--model_type",
         type=str,
         required=True,
-        choices=["naive", "hard_param", "soft_param"],
+        choices=list(model_configs.keys()),
         help="Model to run and evaluate",
     )
 
@@ -81,18 +91,19 @@ if __name__ == "__main__":
 
     # Get model configs
     config = model_configs[args.model_type]
-    use_slice_heads = config["use_slice_heads"]
+    active_slice_heads = config["active_slice_heads"]
     model_class = config["model_class"]
 
     # Create tasks and payloads
     slice_dict = json.loads(args.slice_dict) if args.slice_dict else {}
-    if use_slice_heads:
+    if active_slice_heads:
         task_config.update({"slice_dict": slice_dict})
+        task_config["active_slice_heads"] = active_slice_heads
     else:
         task_config.update({"slice_dict": None})
 
     tasks, payloads = create_glue_tasks_payloads(task_names, **task_config)
-    if use_slice_heads:
+    if active_slice_heads:
         tasks = convert_to_slicing_tasks(tasks)
 
     # Initialize and train model
