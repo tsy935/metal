@@ -228,7 +228,7 @@ class SliceModel(MetalModel):
         return Ys, A_weights
 
 
-class SliceModelRep(MetalModel):
+class SliceRepModel(MetalModel):
     """ Slice-aware version of MetalModel.
 
     At the moment, only supports:
@@ -236,7 +236,7 @@ class SliceModelRep(MetalModel):
         * A single base task + an arbitrary number of slice tasks (slice_head_type != None)
     """
 
-    def __init__(self, tasks, **kwargs):
+    def __init__(self, tasks, h_dim=None, **kwargs):
         validate_slice_tasks(tasks)
         super().__init__(tasks, **kwargs)
         self.base_task = [
@@ -246,17 +246,25 @@ class SliceModelRep(MetalModel):
             name: t for name, t in self.task_map.items() if t.slice_head_type == "ind"
         }
 
-        neck_dim = self.base_task.head_module.module.in_features
+        # NOTE: the indicator heads still have the original output dim of the body
+        # but the base head might not (because they are initialized to different h_dim)
+        neck_dim = list(self.slice_ind_tasks.values())[0].head_module.module.in_features
         num_slices = len(self.slice_ind_tasks)
+
+        if h_dim:
+            # ensure that the head_modules are initialized for h_dim
+            assert self.base_task.head_module.module.in_features == h_dim
+            self.h_dim = h_dim
+        else:
+            self.h_dim = neck_dim
 
         self.slice_reps = []
         for k in range(num_slices):
-            layer = nn.Linear(neck_dim, neck_dim)
+            layer = nn.Sequential(nn.Linear(neck_dim, self.h_dim), nn.ReLU())
             if self.config["device"] >= 0:
                 if torch.cuda.is_available():
                     layer.to(torch.device(f"cuda:{self.config['device']}"))
             self.slice_reps.append(layer)
-            # TODO: add activation
 
     def forward_body(self, X):
         """ Makes a forward pass through the "body" of the network
