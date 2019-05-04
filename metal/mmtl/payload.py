@@ -104,5 +104,3 @@ class Payload(object):
             if label_name in labels_to_tasks:
                 new_task = labels_to_tasks[label_name]
                 self._retarget_labelset(label_name, new_task)
-            else:
-                self._retarget_labelset(label_name, None)
