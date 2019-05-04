@@ -107,8 +107,14 @@ def main(args):
 
     # Initialize and train model
     model = model_class(tasks, **model_config)
-
     trainer = MultitaskTrainer(**trainer_config)
+
+    # Write config files
+    trainer._set_writer()
+    trainer.writer.write_config(model_config, "model_config")
+    trainer.writer.write_config(task_config, "task_config")
+
+    # train model
     trainer.train_model(model, payloads)
 
     # Evaluate trained model on slices
