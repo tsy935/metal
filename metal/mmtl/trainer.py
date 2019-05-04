@@ -1,4 +1,5 @@
 import copy
+import glob
 import os
 import pickle
 import random
@@ -295,21 +296,30 @@ class MultitaskTrainer(object):
 
         model.eval()
         # Restore best model if applicable
-        if self.checkpointer and self.checkpointer.checkpoint_best:
+        if self.checkpointer:
             # First do a final checkpoint at the end of training
             metrics_dict = self._execute_logging(
                 model, payloads, batch_size, force_log=True
             )
 
-            self.checkpointer.load_best_model(model=model)
             # Copy best model to log directory
             if self.writer:
-                path_to_best = os.path.join(
-                    self.checkpointer.checkpoint_dir, "best_model.pth"
-                )
                 path_to_logs = self.writer.log_subdir
-                if os.path.isfile(path_to_best):
-                    copy2(path_to_best, path_to_logs)
+                if self.checkpointer.checkpoint_best:
+                    self.checkpointer.load_best_model(model=model)
+
+                    path_to_best = os.path.join(
+                        self.checkpointer.checkpoint_dir, "best_model.pth"
+                    )
+                    if os.path.isfile(path_to_best):
+                        copy2(path_to_best, path_to_logs)
+                else:
+                    # Copy the most recent checkpoint (last epoch)
+                    checkpoint_paths = glob.glob(
+                        os.path.join(self.checkpointer.checkpoint_dir, "*")
+                    )
+                    last_checkpoint_path = max(checkpoint_paths, key=os.path.getctime)
+                    copy2(last_checkpoint_path, path_to_logs)
 
         # Print final performance values
         if self.config["verbose"]:
@@ -392,7 +402,7 @@ class MultitaskTrainer(object):
             # Log to screen/file/TensorBoard
             self.logger.log(metrics_dict)
             # Save best model if applicable
-            self._checkpoint(model, metrics_dict)
+            self._checkpoint(model, metrics_dict, force_save=force_log)
 
         self.metrics_hist.update(metrics_dict)
         model.train()
@@ -488,18 +498,28 @@ class MultitaskTrainer(object):
             aggregate_metrics.update(metric_fn(self.metrics_hist))
         return aggregate_metrics
 
-    def _checkpoint(self, model, metrics_dict):
+    def _checkpoint(self, model, metrics_dict, force_save=False):
         if self.checkpointer is None:
             return
         iteration = self.logger.unit_total
         self.checkpointer.checkpoint(
-            metrics_dict, iteration, model, self.optimizer, self.lr_scheduler
+            metrics_dict,
+            iteration,
+            model,
+            self.optimizer,
+            self.lr_scheduler,
+            force_save,
         )
         # EXPERIMENTAL:
         if self.config["checkpoint_tasks"]:
             for checkpointer in self.task_checkpointers:
                 checkpointer.checkpoint(
-                    metrics_dict, iteration, model, self.optimizer, self.lr_scheduler
+                    metrics_dict,
+                    iteration,
+                    model,
+                    self.optimizer,
+                    self.lr_scheduler,
+                    force_save,
                 )
 
     def _reset_losses(self):
