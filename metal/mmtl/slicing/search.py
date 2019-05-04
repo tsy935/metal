@@ -4,8 +4,10 @@ python search.py --max_search 2 --search_metric RTE/RTE_test/RTE_gold/accuracy -
 """
 
 import argparse
+import datetime
 import json
 import os
+import pprint
 import subprocess
 
 from metal.mmtl.slicing.launch import get_parser, main as launch
@@ -70,6 +72,18 @@ def main(args):
     print("Best path:", best_path)
     print("Best config:", best_config)
     print("Best metric:", best_metric)
+
+    # save to file
+    now = datetime.datetime.now()
+    now_str = now.strftime("%Y-%m-%d_%H:%M:%S")
+    save_path = f"{now_str}_{os.path.basename(args.config)}.txt"
+    with open(save_path, "w") as f:
+        if args.search_metric:
+            f.write(f"Path: {best_path}\n")
+            f.write("Config: {best_config}\n")
+            f.write(f"{args.search_metric}: {best_metric}\n")
+        pprint.pprint(config_to_metrics, f)
+    print(f"Results saved to {save_path}")
 
 
 if __name__ == "__main__":
