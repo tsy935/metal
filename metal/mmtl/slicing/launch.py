@@ -114,20 +114,20 @@ if __name__ == "__main__":
         "ind": active_slice_heads.get("ind", False),
     }
     slice_tasks, slice_payloads = create_glue_tasks_payloads(task_names, **task_config)
-    eval_payload = slice_payloads[1]  # eval on dev scores
     pred_labelsets = [
         labelset
-        for labelset in eval_payload.labels_to_tasks.keys()
+        for labelset in slice_payloads[0].labels_to_tasks.keys()
         if "pred" in labelset or "_gold" in labelset
     ]
     # Only eval "pred" labelsets on main task head -- continue eval of inds on ind-heads
-    eval_payload.remap_labelsets(
-        {pred_labelset: base_task_name for pred_labelset in pred_labelsets}
-    )
+    for p in slice_payloads[1:]:  # remap val and test payloads
+        p.remap_labelsets(
+            {pred_labelset: base_task_name for pred_labelset in pred_labelsets}
+        )
 
     if args.validate_on_slices:
         print("Will compute validation scores for slices based on main head.")
-        payloads[1] = eval_payload
+        payloads[1] = slice_payloads[1]
 
     if active_slice_heads:
         tasks = convert_to_slicing_tasks(tasks)
@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     # Evaluate trained model on slices
     model.eval()
-    slice_metrics = model.score(eval_payload)
+    slice_metrics = model.score(slice_payloads[2])
     pprint(slice_metrics)
     if trainer.writer:
         trainer.writer.write_metrics(slice_metrics, "slice_metrics.json")
