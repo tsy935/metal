@@ -8,6 +8,7 @@ python compare_to_baseline.py --seed 1 --tasks RTE --slice_dict '{"RTE": ["dash_
 import argparse
 import copy
 import json
+import os
 from pprint import pprint
 
 import numpy as np
@@ -46,42 +47,14 @@ model_configs = {
     },
 }
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Launch slicing models/baselines on GLUE tasks", add_help=False
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=np.random.randint(1e6),
-        help="A single seed to use for trainer, model, and task configs",
-    )
-    parser.add_argument(
-        "--model_type",
-        type=str,
-        required=True,
-        choices=list(model_configs.keys()),
-        help="Model to run and evaluate",
-    )
-    parser.add_argument(
-        "--validate_on_slices",
-        type=bool,
-        default=False,
-        help="Whether to map eval main head on validation set during training",
-    )
 
-    parser = add_flags_from_config(parser, trainer_defaults)
-    parser = add_flags_from_config(parser, model_defaults)
-    parser = add_flags_from_config(parser, task_defaults)
-    args = parser.parse_args()
-
+def main(args):
     # Extract flags into their respective config files
     trainer_config = recursive_merge_dicts(
         trainer_defaults, vars(args), misses="ignore"
     )
     model_config = recursive_merge_dicts(model_defaults, vars(args), misses="ignore")
     task_config = recursive_merge_dicts(task_defaults, vars(args), misses="ignore")
-    args = parser.parse_args()
 
     task_names = args.tasks.split(",")
     assert len(task_names) == 1
@@ -144,3 +117,40 @@ if __name__ == "__main__":
     pprint(slice_metrics)
     if trainer.writer:
         trainer.writer.write_metrics(slice_metrics, "slice_metrics.json")
+        return os.path.join(trainer.writer.log_subdir, "slice_metrics.json")
+
+
+def get_parser():
+    parser = argparse.ArgumentParser(
+        description="Launch slicing models/baselines on GLUE tasks", add_help=False
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=np.random.randint(1e6),
+        help="A single seed to use for trainer, model, and task configs",
+    )
+    parser.add_argument(
+        "--model_type",
+        type=str,
+        required=True,
+        choices=list(model_configs.keys()),
+        help="Model to run and evaluate",
+    )
+    parser.add_argument(
+        "--validate_on_slices",
+        type=bool,
+        default=False,
+        help="Whether to map eval main head on validation set during training",
+    )
+
+    parser = add_flags_from_config(parser, trainer_defaults)
+    parser = add_flags_from_config(parser, model_defaults)
+    parser = add_flags_from_config(parser, task_defaults)
+    return parser
+
+
+if __name__ == "__main__":
+    parser = get_parser()
+    args = parser.parse_args()
+    main(args)
