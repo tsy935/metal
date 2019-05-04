@@ -1,7 +1,10 @@
+import copy
+
 import torch
 import torch.nn as nn
 
 from metal.mmtl.data import MmtlDataLoader, MmtlDataset
+from metal.mmtl.modules import MetalModuleWrapper
 from metal.mmtl.payload import Payload
 from metal.mmtl.slicing.synthetics.data_generator import (
     generate_data,
@@ -19,9 +22,11 @@ def create_tasks(
     create_preds=True,
     create_base=True,
     verbose=False,
+    h_dim=None,
 ):
     input_module = nn.Sequential(nn.Linear(2, 5), nn.ReLU())
-    head_module = nn.Linear(5, 1)  # NOTE: slice_model requires 1dim output head
+    # NOTE: slice_model requires 1dim output head
+    head_module = nn.Linear(h_dim, 1) if h_dim else nn.Linear(5, 1)
     task = BinaryClassificationTask(
         name=task_name, input_module=input_module, head_module=head_module
     )
@@ -52,6 +57,8 @@ def create_tasks(
                 "ind",
                 loss_multiplier=loss_multiplier,
             )
+            ind_head_module = MetalModuleWrapper(nn.Linear(5, 1))
+            slice_ind_task.head_module = ind_head_module
             tasks.append(slice_ind_task)
 
     if verbose:
