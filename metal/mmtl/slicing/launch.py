@@ -28,13 +28,10 @@ model_defaults["delete_heads"] = True  # mainly load the base representation wei
 trainer_defaults["checkpoint"] = True
 trainer_defaults["checkpoint_config"]["checkpoint_best"] = False
 trainer_defaults["writer"] = "tensorboard"
-trainer_defaults["metrics_config"][
-    "test_split"
-] = "valid"  # for GLUE, don't have real test set
 
 # Model configs
 model_configs = {
-    "naive": {"model_class": MetalModel, "active_slice_heads": None},
+    "naive": {"model_class": MetalModel, "active_slice_heads": {}},
     "hard_param": {
         "model_class": MetalModel,
         "active_slice_heads": {"pred": True, "ind": False},

@@ -187,7 +187,7 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
             data_loaders = create_glue_dataloaders(
                 datasets,
                 dl_kwargs=dl_kwargs,
-                split_prop=config["split_prop"],
+                split_prop=float(config["split_prop"]),
                 splits=config["splits"],
                 seed=config["seed"],
             )

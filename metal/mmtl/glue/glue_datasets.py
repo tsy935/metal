@@ -126,6 +126,9 @@ class GLUEDataset(data.Dataset):
             dev_idx = full_idx[split_div:]
 
             # create data loaders
+            if "shuffle" in kwargs:
+                del kwargs["shuffle"]
+
             train_dataloader = data.DataLoader(
                 self,
                 collate_fn=self._collate_fn,
