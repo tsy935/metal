@@ -23,6 +23,7 @@ def get_glue_dataset(dataset_name, split, bert_vocab, **kwargs):
     return GLUEDataset.from_tsv(
         # class kwargs
         dataset_name,
+        split=split,
         bert_vocab=bert_vocab,
         # load_tsv kwargs
         tsv_path=config["tsv_path"],
@@ -46,6 +47,7 @@ class GLUEDataset(data.Dataset):
     def __init__(
         self,
         dataset_name,
+        split,
         sentences,
         labels,
         label_type,
@@ -73,6 +75,7 @@ class GLUEDataset(data.Dataset):
             bert_segments: an [n] list of segment masks indicating whether each token
                 is in sent1/sent2 (e.g. [[0, 0, 0, 0, 1, 1, 1], ...])
         """
+        self.split = split
         self.sentences = sentences
         label_name = f"{dataset_name}_gold"
         self.labels = {label_name: torch.tensor(labels, dtype=label_type).view(-1, 1)}
@@ -112,6 +115,8 @@ class GLUEDataset(data.Dataset):
         returns a split dataset assuming train -> split_prop and dev -> 1 - split_prop."""
 
         if split_prop:
+            split_prop = float(split_prop)
+            kwargs["shuffle"] = False
             assert split_prop > 0 and split_prop < 1
 
             # choose random indexes for train/dev
@@ -278,6 +283,7 @@ class GLUEDataset(data.Dataset):
         # class kwargs
         cls,
         dataset_name,
+        split,
         bert_vocab,
         # load_tsv kwargs
         tsv_path,
@@ -319,6 +325,7 @@ class GLUEDataset(data.Dataset):
         # initialize class with data
         return cls(
             dataset_name,
+            split,
             sentences=sentences,
             labels=labels,
             label_type=label_type,
