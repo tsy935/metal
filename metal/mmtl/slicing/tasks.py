@@ -72,8 +72,11 @@ def convert_to_slicing_tasks(tasks):
                 middle_module,
                 attention_module,
                 head_module,
-                slice_head_type=head_type,
+                output_hat_func=t.output_hat_func,
+                loss_hat_func=t.loss_hat_func,
                 loss_multiplier=t.loss_multiplier,
+                scorer=t.scorer,
+                slice_head_type=head_type,
             )
             slicing_tasks.append(slice_t)
 
@@ -84,10 +87,12 @@ def convert_to_slicing_tasks(tasks):
                 middle_module,
                 attention_module,
                 head_module,
-                slice_head_type=head_type,
+                output_hat_func=t.output_hat_func,
+                loss_hat_func=t.loss_hat_func,
                 loss_multiplier=t.loss_multiplier,
+                scorer=t.scorer,
+                slice_head_type=head_type,
             )
-
             slicing_tasks.append(slice_t)
 
         else:
