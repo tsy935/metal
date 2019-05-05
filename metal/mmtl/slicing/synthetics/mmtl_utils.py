@@ -21,17 +21,19 @@ def create_tasks(
     create_ind=True,
     create_preds=True,
     create_base=True,
+    custom_neck_dim=None,
     verbose=False,
     h_dim=None,
 ):
     input_module = nn.Sequential(nn.Linear(2, 5), nn.ReLU())
     # NOTE: slice_model requires 1dim output head
     head_module = nn.Linear(h_dim, 1) if h_dim else nn.Linear(5, 1)
-    task = BinaryClassificationTask(
+
+    base_task = BinaryClassificationTask(
         name=task_name, input_module=input_module, head_module=head_module
     )
-    tasks = [task] if create_base else []
 
+    tasks = []
     # for each slice create an 'ind' task: predicts whether we are in the slice
     # and a 'pred' task: "expert" on predicting labels of slice
     for slice_name in slice_names:
@@ -43,7 +45,7 @@ def create_tasks(
             loss_multiplier = 1.0
         if create_preds:
             slice_pred_task = create_slice_task(
-                task,
+                base_task,
                 f"{task_name}:{slice_name}:pred",
                 "pred",
                 loss_multiplier=loss_multiplier,
@@ -52,7 +54,7 @@ def create_tasks(
 
         if create_ind:
             slice_ind_task = create_slice_task(
-                task,
+                base_task,
                 f"{task_name}:{slice_name}:ind",
                 "ind",
                 loss_multiplier=loss_multiplier,
@@ -60,6 +62,16 @@ def create_tasks(
             ind_head_module = MetalModuleWrapper(nn.Linear(5, 1))
             slice_ind_task.head_module = ind_head_module
             tasks.append(slice_ind_task)
+
+    if custom_neck_dim:
+        # re-init task with different base head module :(
+        head_module = MetalModuleWrapper(nn.Linear(custom_neck_dim, 1))
+        new_base_task = copy.copy(base_task)
+        new_base_task.head_module = head_module
+        base_task = new_base_task
+
+    if create_base:
+        tasks.append(base_task)
 
     if verbose:
         print(f"Creating {len(tasks)} tasks...")
