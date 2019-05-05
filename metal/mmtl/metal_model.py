@@ -296,7 +296,7 @@ class MetalModel(nn.Module):
                 full_metric_name = (
                     f"{task_name}/{payload.name}/{label_name}/{metric_name}"
                 )
-                metrics_dict[full_metric_name] = score
+                metrics_dict[full_metric_name] = float(score)
 
         # If a single metric was given as a string (not list), return a float
         if return_unwrapped:
