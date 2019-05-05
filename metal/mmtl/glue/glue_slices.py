@@ -1,3 +1,4 @@
+import json
 import warnings
 
 import numpy as np
@@ -103,6 +104,31 @@ def is_spatial_expression(dataset, idx):
     words = ["to the left of", "to the right of"]
     both_sentences = get_both_sentences(dataset, idx)
     return any([p in both_sentences for p in words])
+
+
+def stsb_captions(dataset, idx):
+    split = dataset.split
+    genre = json.load(
+        open(f"/dfs/scratch0/chami/metal/metal/mmtl/glue/stsb_{split}_slices.json")
+    )
+    return genre[idx] == "main-captions"
+
+
+def stsb_news(dataset, idx):
+    split = dataset.split
+    genre = json.load(
+        open(f"/dfs/scratch0/chami/metal/metal/mmtl/glue/stsb_{split}_slices.json")
+    )
+    return genre[idx] == "main-news"
+
+
+def stsb_forums(dataset, idx):
+    split = dataset.split
+    genre = json.load(
+        open(f"/dfs/scratch0/chami/metal/metal/mmtl/glue/stsb_{split}_slices.json")
+    )
+    # print(genre[:5])
+    return "forum" in genre[idx]
 
 
 def is_quantification_hypothesis(dataset, idx):
