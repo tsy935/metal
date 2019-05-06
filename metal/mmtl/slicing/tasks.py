@@ -24,12 +24,20 @@ def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multipli
 
     # for ind heads, always initialize a binary class predictor
     elif slice_head_type == "ind":
+        head_module = unwrap_module(base_task.head_module)
+        if isinstance(head_module, torch.nn.Linear):
+            if head_module.out_features != 1:
+                print(
+                    f"Modifying {base_task.name} out_features from {head_module.out_features} -> 1"
+                )
+                head_module = nn.Linear(head_module.in_features, 1)
+
         slice_task = BinaryClassificationTask(
             slice_task_name,
             input_module=unwrap_module(base_task.input_module),
             middle_module=unwrap_module(base_task.middle_module),
             attention_module=unwrap_module(base_task.attention_module),
-            head_module=unwrap_module(base_task.head_module),
+            head_module=head_module,
             loss_multiplier=loss_multiplier,
             slice_head_type=slice_head_type,
         )
@@ -72,8 +80,6 @@ def convert_to_slicing_tasks(tasks):
                 middle_module,
                 attention_module,
                 head_module,
-                output_hat_func=t.output_hat_func,
-                loss_hat_func=t.loss_hat_func,
                 loss_multiplier=t.loss_multiplier,
                 scorer=t.scorer,
                 slice_head_type=head_type,
@@ -87,8 +93,6 @@ def convert_to_slicing_tasks(tasks):
                 middle_module,
                 attention_module,
                 head_module,
-                output_hat_func=t.output_hat_func,
-                loss_hat_func=t.loss_hat_func,
                 loss_multiplier=t.loss_multiplier,
                 scorer=t.scorer,
                 slice_head_type=head_type,
