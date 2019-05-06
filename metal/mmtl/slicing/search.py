@@ -28,6 +28,8 @@ def main(args):
         full_conf = {}
         full_conf.update(search_conf)
         full_conf.update(fixed_args)
+        if args.device:
+            full_conf.update({"device": args.device})
 
         arg_list = []
         for k, v in full_conf.items():
@@ -115,6 +117,11 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Config .json with fixed_args and search_space fields",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        help="Device to train on. See trainer kwargs for more.",
     )
     args = parser.parse_args()
     main(args)
