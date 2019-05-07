@@ -137,6 +137,8 @@ class GLUEDataset(data.Dataset):
                         # WARNING: no shuffling before this!
                         ind_labels = create_slice_labels(self, task_name, slice_name)["ind"]
                         slice_mask = np.array(ind_labels).squeeze() == 1
+                        if np.sum(slice_mask) == 0:
+                            continue
                         # take the first split_prop num examples in the slice 
                         slice_idx = full_idx[slice_mask]
                         num_to_choose = int(np.sum(slice_mask) * split_prop)
