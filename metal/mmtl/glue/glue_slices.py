@@ -226,7 +226,7 @@ def common_negation(dataset, idx):
         "nowhere",
         "never",
         "hardly",
-        "scarecly",
+        "scarcely",
         "barely",
         "doesn't",
         "isn't",
