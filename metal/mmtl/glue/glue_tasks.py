@@ -190,6 +190,7 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
                 split_prop=float(config["split_prop"]),
                 splits=config["splits"],
                 seed=config["seed"],
+                slice_dict=config["slice_dict"]
             )
 
         if task_name == "COLA":
@@ -487,7 +488,7 @@ def create_glue_datasets(
     return datasets
 
 
-def create_glue_dataloaders(datasets, dl_kwargs, split_prop, splits, seed=123):
+def create_glue_dataloaders(datasets, dl_kwargs, split_prop, splits, seed=123, slice_dict=None):
     """ Initializes train/dev/test dataloaders given dataset_class"""
     dataloaders = {}
     split_shuffle = {"train": True, "valid": False, "test": False}
@@ -496,15 +497,15 @@ def create_glue_dataloaders(datasets, dl_kwargs, split_prop, splits, seed=123):
     if split_prop and "train" in splits:
         dataloaders["train"], dataloaders["valid"] = datasets["train"].get_dataloader(
             split_prop=split_prop,
-            split_seed=seed,
-            shuffle=split_shuffle["train"],
+            split_seed=1,
+            slice_dict=slice_dict, #HACK: for now -- split based on slice proportions
             **dl_kwargs,
         )
 
         # Use the dev set as test set if available.
         if "valid" in datasets:
             dataloaders["test"] = datasets["valid"].get_dataloader(
-                shuffle=split_shuffle["test"], **dl_kwargs
+                **dl_kwargs
             )
 
     # When split_prop is None, we use standard train/dev/test splits.
