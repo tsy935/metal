@@ -17,7 +17,10 @@ import numpy as np
 
 metadata_to_extract = {"model_config.json": ["seed"], "config.json": ["l2", "lr"]}
 
-metrics_to_extract = {"STSB": [r".*pearson_spearman$"]}
+metrics_to_extract = {
+    "STSB": [r".*pearson_spearman$"],
+    "COLA": [r".*matthews_corr"]
+}
 
 
 def recursive_find_key(obj, key):
