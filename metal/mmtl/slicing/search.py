@@ -27,6 +27,8 @@ def main(args):
     for search_conf in configs:
         full_conf = {}
         full_conf.update(search_conf)
+        if any([k in full_conf for k in fixed_args.keys()]):
+            raise ValueError("Fixed arg shows up in search space.")
         full_conf.update(fixed_args)
         if args.device:
             full_conf.update({"device": args.device})
