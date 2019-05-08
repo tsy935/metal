@@ -90,6 +90,7 @@ task_defaults = {
     "auxiliary_loss_multiplier": 1.0,
     "tasks": None,  # Comma-sep task list e.g. QNLI,QQP
     # Slicing
+    "run_spacy": True,
     "slice_dict": None,  # A map of the slices that apply to each task
     "active_slice_heads": {"ind": True, "pred": True},
 }
@@ -148,7 +149,7 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
         has_payload = task_name not in config["auxiliary_task_dict"]
 
         # Note whether this task has auxiliary tasks that apply to it and require spacy
-        run_spacy = False
+        run_spacy = config["run_spacy"]
         for aux_task, target_payloads in config["auxiliary_task_dict"].items():
             run_spacy = run_spacy or (
                 task_name in target_payloads
