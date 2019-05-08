@@ -220,6 +220,7 @@ class MetalModel(nn.Module):
                         "You MUST fine-tune the model to recover original performance."
                     )
 
+                    source_state_dict = torch.load(model_path, map_location=device)["model"]
                     for module in list(source_state_dict.keys()):
                         if "head_modules" in module:
                             msg = f"Deleting {module} from loaded weights"
