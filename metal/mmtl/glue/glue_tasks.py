@@ -54,6 +54,7 @@ task_defaults = {
     "max_len": 200,
     "max_datapoints": -1,
     "seed": None,
+    "split_seed": 1, # Used if slice_prop is specified
     "preprocessed": False,  # If True, load the cached datasets with spacy tokens saved
     "dl_kwargs": {"batch_size": 16},
     "task_dl_kwargs": None,  # Overwrites dl kwargs e.g. {"STSB": {"batch_size": 2}}
@@ -189,7 +190,8 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
                 dl_kwargs=dl_kwargs,
                 split_prop=float(config["split_prop"]),
                 splits=config["splits"],
-                seed=config["seed"],
+                # NOTE: this is different from seed - so we can init different models without affecting data
+                split_seed=config["split_seed"],  
                 slice_dict=config["slice_dict"]
             )
 
@@ -488,7 +490,7 @@ def create_glue_datasets(
     return datasets
 
 
-def create_glue_dataloaders(datasets, dl_kwargs, split_prop, splits, seed=123, slice_dict=None):
+def create_glue_dataloaders(datasets, dl_kwargs, split_prop, splits, split_seed=None, slice_dict=None):
     """ Initializes train/dev/test dataloaders given dataset_class"""
     dataloaders = {}
     split_shuffle = {"train": True, "valid": False, "test": False}
@@ -497,7 +499,7 @@ def create_glue_dataloaders(datasets, dl_kwargs, split_prop, splits, seed=123, s
     if split_prop and "train" in splits:
         dataloaders["train"], dataloaders["valid"] = datasets["train"].get_dataloader(
             split_prop=split_prop,
-            split_seed=1,
+            split_seed=split_seed,
             slice_dict=slice_dict, #HACK: for now -- split based on slice proportions
             **dl_kwargs,
         )
