@@ -371,9 +371,12 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
         tasks.append(task)
 
         # Gather slice names
-        slice_names = (
-            config["slice_dict"].get(task_name, []) if config["slice_dict"] else []
-        )
+        if config["active_slice_heads"]:
+            slice_names = (
+                config["slice_dict"].get(task_name, [])
+            )
+        else:
+            slice_names = []
 
         # Add a task for each slice
         active_slice_heads = [

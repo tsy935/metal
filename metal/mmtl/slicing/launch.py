@@ -79,11 +79,8 @@ def main(args):
 
     # Create tasks and payloads
     slice_dict = json.loads(args.slice_dict) if args.slice_dict else {}
-    if active_slice_heads:
-        task_config.update({"slice_dict": slice_dict})
-        task_config["active_slice_heads"] = active_slice_heads
-    else:
-        task_config.update({"slice_dict": None})
+    task_config.update({"slice_dict": slice_dict})
+    task_config["active_slice_heads"] = active_slice_heads
     tasks, payloads = create_glue_tasks_payloads(task_names, **task_config)
 
     # Create evaluation payload with test_slices -> primary task head
