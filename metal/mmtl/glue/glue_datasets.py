@@ -137,6 +137,7 @@ class GLUEDataset(data.Dataset):
                         # WARNING: no shuffling before this!
                         ind_labels = create_slice_labels(self, task_name, slice_name)["ind"]
                         slice_mask = np.array(ind_labels).squeeze() == 1
+                        print(f"{slice_name} [{np.sum(slice_mask)}/{len(slice_mask)}]")
                         if np.sum(slice_mask) == 0:
                             continue
                         # take the first split_prop num examples in the slice 
