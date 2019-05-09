@@ -2,7 +2,10 @@
 Creates slice/baseline/ablation model, trains, and evaluates on
 corresponding slice prediction labelsets.
 
-python compare_to_baseline.py --seed 1 --tasks RTE --slice_dict '{"RTE": ["dash_semicolon", "more_people", "BASE"]}' --model_type naive --n_epochs 1
+python launch.py --seed 1 --tasks RTE --slice_dict '{"RTE": ["dash_semicolon", "more_people", "BASE"]}' --model_type naive --n_epochs 1
+
+python launch.py --model_type manual --tasks COLA --lr 5e-05 --lr_scheduler linear --checkpoint_metric COLA/COLA_valid/COLA_gold/matthews_corr --slice_dict '{"COLA": ["short_premise", "has_wh_words"]}' --slice_loss_mult '{"COLA_slice:short_premise:pred": 5}'
+
 """
 
 import argparse
@@ -34,6 +37,10 @@ trainer_defaults["writer"] = "tensorboard"
 model_configs = {
     "naive": {"model_class": MetalModel, "active_slice_heads": {}},
     "hard_param": {
+        "model_class": MetalModel,
+        "active_slice_heads": {"pred": True, "ind": False},
+    },
+    "manual": {
         "model_class": MetalModel,
         "active_slice_heads": {"pred": True, "ind": False},
     },
@@ -72,11 +79,8 @@ def main(args):
 
     # Create tasks and payloads
     slice_dict = json.loads(args.slice_dict) if args.slice_dict else {}
-    if active_slice_heads:
-        task_config.update({"slice_dict": slice_dict})
-        task_config["active_slice_heads"] = active_slice_heads
-    else:
-        task_config.update({"slice_dict": None})
+    task_config.update({"slice_dict": slice_dict})
+    task_config["active_slice_heads"] = active_slice_heads
     tasks, payloads = create_glue_tasks_payloads(task_names, **task_config)
 
     # Create evaluation payload with test_slices -> primary task head
@@ -105,10 +109,29 @@ def main(args):
     if active_slice_heads:
         tasks = convert_to_slicing_tasks(tasks)
 
+    if args.model_type == "manual":
+        slice_loss_mult = (
+            json.loads(args.slice_loss_mult) if args.slice_loss_mult else {}
+        )
+        for task in tasks:
+            if task.name in slice_loss_mult.keys():
+                task.loss_multiplier = slice_loss_mult[task.name]
+                print(
+                    "Override {} loss multiplier with{}.".format(
+                        task.name, slice_loss_mult[task.name]
+                    )
+                )
+
     # Initialize and train model
     model = model_class(tasks, **model_config)
-
     trainer = MultitaskTrainer(**trainer_config)
+
+    # Write config files
+    trainer._set_writer()
+    trainer.writer.write_config(model_config, "model_config")
+    trainer.writer.write_config(task_config, "task_config")
+
+    # train model
     trainer.train_model(model, payloads)
 
     # Evaluate trained model on slices
@@ -144,6 +167,12 @@ def get_parser():
         help="Whether to map eval main head on validation set during training",
     )
 
+    parser.add_argument(
+        "--slice_loss_mult",
+        type=str,
+        default=False,
+        help="Slice loss multipliers that override the default ones (1/num_slices).",
+    )
     parser = add_flags_from_config(parser, trainer_defaults)
     parser = add_flags_from_config(parser, model_defaults)
     parser = add_flags_from_config(parser, task_defaults)

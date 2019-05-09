@@ -11,6 +11,7 @@ from torch.utils.data.sampler import Sampler, SubsetRandomSampler
 from tqdm import tqdm
 
 from metal.mmtl.glue.glue_preprocess import get_task_tsv_config, load_tsv
+from metal.mmtl.glue.glue_slices import create_slice_labels # HACK: need this for cross val
 from metal.utils import padded_tensor, set_seed
 
 nlp = spacy.load("en_core_web_sm")
@@ -23,6 +24,7 @@ def get_glue_dataset(dataset_name, split, bert_vocab, **kwargs):
     return GLUEDataset.from_tsv(
         # class kwargs
         dataset_name,
+        split=split,
         bert_vocab=bert_vocab,
         # load_tsv kwargs
         tsv_path=config["tsv_path"],
@@ -46,6 +48,7 @@ class GLUEDataset(data.Dataset):
     def __init__(
         self,
         dataset_name,
+        split,
         sentences,
         labels,
         label_type,
@@ -73,6 +76,7 @@ class GLUEDataset(data.Dataset):
             bert_segments: an [n] list of segment masks indicating whether each token
                 is in sent1/sent2 (e.g. [[0, 0, 0, 0, 1, 1, 1], ...])
         """
+        self.split = split
         self.sentences = sentences
         label_name = f"{dataset_name}_gold"
         self.labels = {label_name: torch.tensor(labels, dtype=label_type).view(-1, 1)}
@@ -107,23 +111,66 @@ class GLUEDataset(data.Dataset):
     def __len__(self):
         return len(self.bert_tokens)
 
-    def get_dataloader(self, split_prop=None, split_seed=123, **kwargs):
+    def get_dataloader(self, split_prop=None, split_seed=123, slice_dict=None, **kwargs):
         """Returns a dataloader based on self (dataset). If split_prop is specified,
         returns a split dataset assuming train -> split_prop and dev -> 1 - split_prop."""
 
         if split_prop:
+            split_prop = float(split_prop)
+            kwargs["shuffle"] = False
             assert split_prop > 0 and split_prop < 1
 
             # choose random indexes for train/dev
             N = len(self)
             full_idx = np.arange(N)
             set_seed(split_seed)
-            np.random.shuffle(full_idx)
 
-            # split into train/dev
-            split_div = int(split_prop * N)
-            train_idx = full_idx[:split_div]
-            dev_idx = full_idx[split_div:]
+            # keep a list of slice idx that we need to keep in the train set 
+            # to maintain split prop
+            if slice_dict:
+                reserved_train = set()
+                for task_name, slice_names in slice_dict.items():
+                    for slice_name in slice_names:
+                        if slice_name == "BASE":
+                            continue
+
+                        # WARNING: no shuffling before this!
+                        ind_labels = create_slice_labels(self, task_name, slice_name)["ind"]
+                        slice_mask = np.array(ind_labels).squeeze() == 1
+                        print(f"{slice_name} [{np.sum(slice_mask)}/{len(slice_mask)}]")
+                        if np.sum(slice_mask) == 0:
+                            continue
+                        # take the first split_prop num examples in the slice 
+                        slice_idx = full_idx[slice_mask]
+                        num_to_choose = int(np.sum(slice_mask) * split_prop)
+                        train_slice_idx = set(np.random.choice(slice_idx, num_to_choose))
+
+                        # figure out if an example has already been chosen
+                        already_chosen = train_slice_idx.intersection(reserved_train) 
+                        if len(already_chosen) > 0:
+                            # remove already chosen count from the number we need to further sample
+                            num_to_choose = len(train_slice_idx) - len(already_chosen)
+
+                            # choose from remaining examples 
+                            remaining_slice_idx = np.array(list(set(slice_idx)-already_chosen))
+                            train_slice_idx = set(np.random.choice(remaining_slice_idx, num_to_choose))
+
+                        reserved_train = reserved_train.union(train_slice_idx)
+
+                # grab the remainder after reserving some examples for slices
+                remaining_idx = list(set(full_idx) - set(reserved_train))
+                np.random.shuffle(remaining_idx)
+                split_div = int(split_prop * len(remaining_idx))
+                train_idx = remaining_idx[:split_div]
+                # combine with reserved, and set aside the rest for dev
+                train_idx.extend(list(reserved_train))
+                dev_idx = list(set(full_idx) - set(train_idx))
+            else:
+                np.random.shuffle(full_idx)
+                # split into train/dev
+                split_div = int(split_prop * N)
+                train_idx = full_idx[:split_div]
+                dev_idx = full_idx[split_div:]
 
             # create data loaders
             if "shuffle" in kwargs:
@@ -278,6 +325,7 @@ class GLUEDataset(data.Dataset):
         # class kwargs
         cls,
         dataset_name,
+        split,
         bert_vocab,
         # load_tsv kwargs
         tsv_path,
@@ -319,6 +367,7 @@ class GLUEDataset(data.Dataset):
         # initialize class with data
         return cls(
             dataset_name,
+            split,
             sentences=sentences,
             labels=labels,
             label_type=label_type,
