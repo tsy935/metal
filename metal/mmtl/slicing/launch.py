@@ -18,6 +18,7 @@ import numpy as np
 
 from metal.mmtl.glue.glue_tasks import create_glue_tasks_payloads, task_defaults
 from metal.mmtl.metal_model import MetalModel, model_defaults
+from metal.mmtl.slicing.moe_model import MoEModel
 from metal.mmtl.slicing.slice_model import SliceModel, SliceRepModel
 from metal.mmtl.slicing.tasks import convert_to_slicing_tasks
 from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
@@ -51,6 +52,10 @@ model_configs = {
     "soft_param_rep": {
         "model_class": SliceRepModel,
         "active_slice_heads": {"pred": False, "ind": True},
+    },
+    "moe": {
+        "model_class": MoEModel,
+        "active_slice_heads": {"pred": True, "ind": False},
     },
 }
 
@@ -122,8 +127,37 @@ def main(args):
                     )
                 )
 
-    # Initialize and train model
-    model = model_class(tasks, **model_config)
+    if args.model_type == "moe":
+        experts = {}
+        for slice_name in slice_dict[base_task_name]:
+            if slice_name == "BASE":
+                continue
+            task_config.update({"slice_dict": {base_task_name: [slice_name]}})
+            tasks_slice, payloads_slice = create_glue_tasks_payloads(
+                task_names, **task_config
+            )
+            tasks_slice = convert_to_slicing_tasks(tasks_slice)
+            print(tasks_slice)
+            print(payloads_slice)
+
+            # remove the base task labels from the expert payloads.
+            for p in payloads_slice:
+                p.labels_to_tasks.pop(f"{base_task_name}_gold")
+            # remove the slice task labels from the payloads used to train the MoEModel.
+            for p in payloads:
+                p.labels_to_tasks.pop(f"{base_task_name}_slice:{slice_name}:pred")
+
+            model = MetalModel(tasks_slice[1:], verbose=False)
+            trainer = MultitaskTrainer(seed=args.seed)
+            metrics_dict = trainer.train_model(model, payloads_slice, **trainer_config)
+            print(metrics_dict)
+            experts[slice_name] = model
+        # MoEModel takes one base task
+        model = model_class([tasks[0]], experts, **model_config)
+    else:
+        # Initialize and train model
+        model = model_class(tasks, **model_config)
+
     trainer = MultitaskTrainer(**trainer_config)
 
     # Write config files
