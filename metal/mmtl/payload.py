@@ -1,5 +1,5 @@
 import torch
-
+from metal.mmtl.data import MmtlDataLoader, MmtlDataset
 
 class Payload(object):
     """A bundle of data_loaders...
@@ -26,6 +26,22 @@ class Payload(object):
             f"split={self.split})"
         )
 
+    @classmethod
+    def from_tensors(self, name, X, Y, task_name, split, **data_loader_kwargs):
+        """A shortcut for creating a Payload for data with one field and one label set
+        name: the name of this Payload
+        X: a Tensor of data of shape [n, ?]
+        Y: a Tensor of labels of shape [n, ?]
+        task_name: the name of the Task that the label set Y corresponds to
+        split: the string name of the split that this Payload corresponds to
+        X and Y will be packaged into an MmtlDataset that will be wrapped in an
+        MmtlDataLoader.
+        """
+        dataset = MmtlDataset(X, Y)
+        data_loader = MmtlDataLoader(dataset, **data_loader_kwargs)
+        labels_to_tasks = {"labels": task_name}
+        return Payload(name, data_loader, labels_to_tasks, split)
+    
     def add_label_set(
         self, task_name, label_name, label_list=None, label_fn=None, verbose=True
     ):
