@@ -165,7 +165,7 @@ class BinaryClassificationTask(ClassificationTask):
     * Adds an additional field, `is_slice`, which indicates whether the
         task targets dataset slice.
     * Enforces that the output dimension of the head=1. This is necessary
-        for the current design of attentino in the SliceModel.
+        for the current design of attention in the SliceModel.
     """
 
     def __init__(
@@ -212,3 +212,53 @@ class BinaryClassificationTask(ClassificationTask):
         return (
             f"{metal_repr[:-1]}, slice_head_type={self.slice_head_type})"
         )  # trim closing paren in repr')'
+
+class MultiClassificationTask(ClassificationTask):
+    """A multi classification task supported in a SliceModel.
+
+    Key changes:
+    * Adds an additional field, `is_slice`, which indicates whether the
+        task targets dataset slice.
+    * Note may not work with current design of attention in the SliceModel
+    """
+
+    def __init__(
+        self,
+        name,
+        input_module=IdentityModule(),
+        middle_module=IdentityModule(),
+        attention_module=IdentityModule(),
+        head_module=IdentityModule(),
+        output_hat_func=output_hat_func,
+        loss_hat_func=categorical_cross_entropy,
+        loss_multiplier=1.0,
+        scorer=Scorer(custom_metric_funcs={acc_f1: ["accuracy", "f1", "acc_f1"]}),
+        # standard_metrics=["accuracy"]),
+        slice_head_type=None,
+    ) -> None:
+
+        super(MultiClassificationTask, self).__init__(
+            name,
+            input_module,
+            middle_module,
+            attention_module,
+            head_module,
+            output_hat_func,
+            loss_hat_func,
+            loss_multiplier,
+            scorer,
+        )
+
+        # Add an additional attribute to indicator head type
+        assert slice_head_type in ["ind", "pred", None]
+        self.slice_head_type = slice_head_type
+
+    def __repr__(self):
+        """Overrides existing __repr__ function to include slice information."""
+        metal_repr = str(super(MultiClassificationTask, self).__repr__())
+        return (
+            f"{metal_repr[:-1]}, slice_head_type={self.slice_head_type})"
+        )  # trim closing paren in repr')'
+
+
+
