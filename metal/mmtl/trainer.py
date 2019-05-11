@@ -236,6 +236,7 @@ class MultitaskTrainer(object):
 
                 # Forward pass to calculate the average loss per example by task
                 # Counts stores the number of examples in each batch with labels by task
+                print('batch: ', batch[0]['data'].shape)
                 loss_dict, count_dict = model.calculate_loss(
                     *batch, payload_name, labels_to_tasks
                 )
