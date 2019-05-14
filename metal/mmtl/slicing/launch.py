@@ -115,7 +115,7 @@ def main(args):
         )
         for task in tasks:
             if task.name in slice_loss_mult.keys():
-                task.loss_multiplier = slice_loss_mult[task.name]
+                task.loss_multiplier *= slice_loss_mult[task.name]
                 print(
                     "Override {} loss multiplier with{}.".format(
                         task.name, slice_loss_mult[task.name]
