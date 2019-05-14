@@ -15,12 +15,12 @@ from metal.utils import convert_labels
 def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multiplier=1.0):
     """Creates a slice task identical to a base task but with different head params"""
     # for pred head, copy the base task head to match the output labelspace
+    slice_task = copy.copy(base_task)
+    slice_task.name = slice_task_name
+    slice_task.slice_head_type = slice_head_type
+    slice_task.loss_multiplier = loss_multiplier
     if slice_head_type == "pred":
-        slice_task = copy.copy(base_task)
-        slice_task.name = slice_task_name
         slice_task.head_module = copy.deepcopy(base_task.head_module)
-        slice_task.slice_head_type = slice_head_type
-        slice_task.loss_multiplier = loss_multiplier
 
     # for ind heads, always initialize a binary class predictor
     elif slice_head_type == "ind":
@@ -32,15 +32,8 @@ def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multipli
                 )
                 head_module = nn.Linear(head_module.in_features, 1)
 
-        slice_task = BinaryClassificationTask(
-            slice_task_name,
-            input_module=unwrap_module(base_task.input_module),
-            middle_module=unwrap_module(base_task.middle_module),
-            attention_module=unwrap_module(base_task.attention_module),
-            head_module=head_module,
-            loss_multiplier=loss_multiplier,
-            slice_head_type=slice_head_type,
-        )
+        slice_task.head_module = head_module
+
     else:
         raise ValueError(f"Invalid slice_head_type: {slice_head_type}")
 

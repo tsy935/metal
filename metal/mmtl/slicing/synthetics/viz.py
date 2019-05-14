@@ -31,6 +31,40 @@ def visualize_payload(payload):
         plot_xy(X, Y)
 
 
+def visualize_for_paper(payload):
+    """ Visualizes all labelsets for a given payload. """
+    X = np.array(payload.data_loader.dataset.X_dict["data"])
+    labelsets = payload.data_loader.dataset.Y_dict
+    labels_gold = labelsets["labelset_gold"].numpy()
+    slice_1_mask = labelsets["labelset:slice_1:ind"].numpy() == 1
+    slice_2_mask = labelsets["labelset:slice_2:ind"].numpy() == 1
+
+    gold_1_mask = labels_gold == 1
+    gold_2_mask = labels_gold == 2
+    plt.scatter(X[gold_1_mask, 0], X[gold_1_mask, 1], c="C0", s=20.0, alpha=0.2)
+    plt.scatter(X[gold_2_mask, 0], X[gold_2_mask, 1], c="C1", s=20.0, alpha=0.2)
+
+    in_any_slice = np.logical_or(slice_1_mask, slice_2_mask)
+    plt.scatter(
+        X[np.logical_and(gold_1_mask, in_any_slice), 0],
+        X[np.logical_and(gold_1_mask, in_any_slice), 1],
+        label="Y=1",
+        c="C0",
+        s=20.0,
+        alpha=0.8,
+    )
+    plt.scatter(
+        X[np.logical_and(gold_2_mask, in_any_slice), 0],
+        X[np.logical_and(gold_2_mask, in_any_slice), 1],
+        label="Y=2",
+        c="C1",
+        s=20.0,
+        alpha=0.8,
+    )
+    plt.legend()
+    set_and_show_plot()
+
+
 def visualize_predictions(model, payload):
     """ Use model to evaluate on payload and visualize
     correct/incorrect predictions """
@@ -84,14 +118,16 @@ def set_and_show_plot(xlim=(-1, 1), ylim=(-1, 1)):
     plt.xlim(xlim)
     plt.ylim(ylim)
     plt.axes().set_aspect("equal")
+    plt.xticks([])
+    plt.yticks([])
     plt.show()
 
 
 def plot_xy(X, Y, gt=None, c=None):
     Y1_mask = Y == 1
     Y2_mask = Y == 2
-    plt.scatter(X[Y1_mask, 0], X[Y1_mask, 1], label="Y=1")
-    plt.scatter(X[Y2_mask, 0], X[Y2_mask, 1], label="Y=2")
+    plt.scatter(X[Y1_mask, 0], X[Y1_mask, 1], label="Y=1", s=20.0, alpha=0.6)
+    plt.scatter(X[Y2_mask, 0], X[Y2_mask, 1], label="Y=2", s=20.0, alpha=0.6)
     plt.legend()
     set_and_show_plot()
 
@@ -100,8 +136,11 @@ def plot_correctness(X, preds, gt):
     # plot correct -> red and incorrect -> green
     correct_mask = preds == gt
     incorrect_mask = preds != gt
-    plt.scatter(X[correct_mask, 0], X[correct_mask, 1], c="green")
-    plt.scatter(X[incorrect_mask, 0], X[incorrect_mask, 1], c="red")
+    plt.scatter(X[correct_mask, 0], X[correct_mask, 1], c="gray", alpha=0.2, s=20.0)
+    plt.scatter(
+        X[incorrect_mask, 0], X[incorrect_mask, 1], label="Incorrect", c="red", s=20.0
+    )
+    plt.legend()
     set_and_show_plot()
 
 
