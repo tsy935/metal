@@ -262,7 +262,10 @@ class MetalModel(nn.Module):
             target_metrics = defaultdict(list)
             target_tasks = []
             target_labels = []
-            for full_metric_name in metrics:
+            print(metrics_list)
+            for full_metric_name in metrics_list:
+                print(full_metric_name)
+                #print("DFD")
                 task_name, payload_name, label_name, metric_name = full_metric_name.split(
                     "/"
                 )
@@ -429,6 +432,7 @@ def validate_targets(payload, target_tasks, target_labels):
                     f"payload {payload}."
                 )
                 raise Exception(msg)
+    #print("VALIDATING: ", target_labels)
 
     if target_labels:
         for label_name in target_labels:
