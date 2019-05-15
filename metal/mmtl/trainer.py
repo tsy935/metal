@@ -174,11 +174,13 @@ class MultitaskTrainer(object):
     def train_model(self, model, payloads, **kwargs):
         # NOTE: misses="insert" so we can log extra metadata (e.g. num_parameters)
         # and eventually write to disk.
+        
         self.config = recursive_merge_dicts(self.config, kwargs, misses="insert")
-
+        print('CONFIG: ', self.config)
         self.task_names = [task_name for task_name in model.task_map]
         self.payload_names = [payload.name for payload in payloads]
         train_payloads = [p for p in payloads if p.split == "train"]
+       #print('train payloads: ', train_payloads)
 
         # Calculate epoch statistics
         # NOTE: We calculate approximate count size using batch_size * num_batches
@@ -236,7 +238,8 @@ class MultitaskTrainer(object):
 
                 # Forward pass to calculate the average loss per example by task
                 # Counts stores the number of examples in each batch with labels by task
-                print('batch: ', batch[0]['data'].shape)
+                
+                #print('batch: ', batch[0]['data'].double())
                 loss_dict, count_dict = model.calculate_loss(
                     *batch, payload_name, labels_to_tasks
                 )

@@ -34,6 +34,7 @@ class ProportionalScheduler(PayloadScheduler):
         # First filter to only those payloads belonging to the given split
         payloads = [p for p in payloads if p.split == split]
         data_loaders = [iter(p.data_loader) for p in payloads]
+        #print('data loaders: ', data_loaders)
         batch_counts = [len(p.data_loader) for p in payloads]
         batch_assignments = []
         for payload_idx in range(len(payloads)):
@@ -42,5 +43,6 @@ class ProportionalScheduler(PayloadScheduler):
 
         for payload_idx in batch_assignments:
             batch = next(data_loaders[payload_idx])
+            #print('batch in get_batches: ', batch[0]['data'].shape)
             payload = payloads[payload_idx]
             yield (batch, payload.name, payload.labels_to_tasks)

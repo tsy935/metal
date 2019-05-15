@@ -23,6 +23,7 @@ class MmtlDataset(Dataset):
     def __getitem__(self, index):
         x_dict = {key: field[index] for key, field in self.X_dict.items()}
         y_dict = {key: label[index] for key, label in self.Y_dict.items()}
+        #print('x_dict: ', x_dict['data'].shape)
         return x_dict, y_dict
 
     def __len__(self):
@@ -51,7 +52,8 @@ def mmtl_collate_fn(batch_list):
         if all(value.dim() == 0 for value in list_):
             tensor_ = torch.stack(list_, dim=0).view(batch_size, -1)
         elif all(len(list_[i]) == len(list_[0]) for i in range(len(list_))):
-            tensor_ = torch.stack(list_, dim=0).view(batch_size, -1)
+            #tensor_ = torch.stack(list_, dim=0).view(batch_size, -1)
+            tensor_ = torch.stack(list_, dim=0).double()
         else:
             tensor_ = padded_tensor(list_).view(batch_size, -1)
         return tensor_
@@ -61,6 +63,7 @@ def mmtl_collate_fn(batch_list):
     X_batch = defaultdict(list)
     Y_batch = defaultdict(list)
     for x_dict, y_dict in batch_list:
+        #print('x_dict in loop: ', x_dict)
         for field_name, value in x_dict.items():
             X_batch[field_name].append(value)
         for label_name, value in y_dict.items():
@@ -69,7 +72,9 @@ def mmtl_collate_fn(batch_list):
     for field_name, values in X_batch.items():
         # Merge lists of tensors, leave other data types alone
         if isinstance(values[0], torch.Tensor):
+            #print('before: ', values)
             X_batch[field_name] = list_to_tensor(values)
+            #print(X_batch[field_name].shape)
 
     for label_name, values in Y_batch.items():
         Y_batch[label_name] = list_to_tensor(values)
@@ -80,5 +85,6 @@ def mmtl_collate_fn(batch_list):
 
 class MmtlDataLoader(DataLoader):
     def __init__(self, dataset, collate_fn=mmtl_collate_fn, **kwargs):
-        assert isinstance(dataset, MmtlDataset)
+        #print('dataset: ', dataset)
+        #assert isinstance(dataset, MmtlDataset)
         super().__init__(dataset, collate_fn=collate_fn, **kwargs)

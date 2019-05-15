@@ -110,12 +110,21 @@ def output_hat_func(X):
     probs = torch.sigmoid(X["data"])
     return torch.cat((probs, 1 - probs), dim=1)
 
+def output_hat_func_multiclass(X):
+    probs = F.softmax(X['data'], dim=1)
+    return probs
+
 
 def categorical_cross_entropy(X, Y):
     return F.binary_cross_entropy(
         torch.sigmoid(X["data"]), convert_labels(Y, "categorical", "onezero").float()
     )
 
+def cross_entropy(X, Y):
+    converted_Y = Y.flatten() - 1 
+    # print('predictions: ', torch.argmax(output_hat_func_multiclass(X), dim=1))
+    # print('labels: ', converted_Y)
+    return F.cross_entropy(X['data'], converted_Y)
 
 class SliceRegressionTask(RegressionTask):
     """A regression task for use in an MMTL MetalModel"""
@@ -229,10 +238,10 @@ class MultiClassificationTask(ClassificationTask):
         middle_module=IdentityModule(),
         attention_module=IdentityModule(),
         head_module=IdentityModule(),
-        output_hat_func=output_hat_func,
-        loss_hat_func=categorical_cross_entropy,
+        output_hat_func=output_hat_func_multiclass,
+        loss_hat_func=cross_entropy,
         loss_multiplier=1.0,
-        scorer=Scorer(custom_metric_funcs={acc_f1: ["accuracy", "f1", "acc_f1"]}),
+        scorer=Scorer(standard_metrics=["accuracy"]),
         # standard_metrics=["accuracy"]),
         slice_head_type=None,
     ) -> None:
