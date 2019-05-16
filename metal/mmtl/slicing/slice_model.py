@@ -14,12 +14,13 @@ from metal.utils import move_to_device
 def validate_slice_tasks(tasks):
     # validate slice head cardinality
     for t in tasks:
-        if t.head_module.module.out_features != 1:
-            raise ValueError(
-                f"{t.name}'s head_module is invalid. "
-                f"SliceModel only supports binary classification "
-                "specified by a output_dim=1."
-            )
+        if t.slice_head_type == 'ind':
+            if t.head_module.module.out_features != 1:
+                raise ValueError(
+                    f"{t.name}'s head_module is invalid. "
+                    f"SliceModel only supports binary classification "
+                    "specified by a output_dim=1."
+                )
 
     base_tasks = [t for t in tasks if not t.slice_head_type]
     slice_tasks = [t for t in tasks if t.slice_head_type]
