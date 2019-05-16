@@ -131,6 +131,11 @@ def main(args):
         experts = {}
         for slice_name in slice_dict[base_task_name]:
             if slice_name == "BASE":
+                base_slice_name = f"{base_task_name}_slice:{slice_name}:pred"
+                for p in payloads:
+                    # remove base task from moe payloads labels
+                    if base_slice_name in p.labels_to_tasks:
+                        p.labels_to_tasks.pop(base_slice_name)
                 continue
             task_config.update({"slice_dict": {base_task_name: [slice_name]}})
             tasks_slice, payloads_slice = create_glue_tasks_payloads(
@@ -146,7 +151,7 @@ def main(args):
             # remove the slice task labels from the payloads used to train the MoEModel.
             for p in payloads:
                 p.labels_to_tasks.pop(f"{base_task_name}_slice:{slice_name}:pred")
-
+            # remove the first task (main task)
             model = MetalModel(tasks_slice[1:], verbose=False)
             trainer = MultitaskTrainer(seed=args.seed)
             metrics_dict = trainer.train_model(model, payloads_slice, **trainer_config)
