@@ -69,8 +69,10 @@ def common_words(dataset, idx, thresh=5):
         >= thresh
     )
 
+
 def short_premise_cola(dataset, idx, thresh=5):
     return len(dataset.sentences[idx][0].split()) < thresh
+
 
 def short_hypothesis(dataset, idx, thresh=5):
     return len(dataset.sentences[idx][1].split()) < thresh
@@ -95,57 +97,68 @@ def has_coordinating_conjunction_hypothesis(dataset, idx):
     hypothesis = dataset.sentences[idx][1]
     return any([p in hypothesis for p in words])
 
+
 def has_coordinating_conjunction(dataset, idx):
     words = ["and", "but", "or"]
     both_sentences = get_both_sentences(dataset, idx)
     return any([p in both_sentences for p in words])
+
 
 def ends_with_verb(dataset, idx):
     doc = dataset.spacy_tokens[idx][0]
     # last is punctuation, second to last for last word
     return doc[-2].pos_ == "VERB"
 
+
 def ends_with_adverb(dataset, idx):
     doc = dataset.spacy_tokens[idx][0]
     # last is punctuation, second to last for last word
     return doc[-2].pos_ == "ADV"
 
+
 def has_but(dataset, idx):
     both_sentences = get_both_sentences(dataset, idx)
     return "but" in both_sentences
+
 
 def has_and(dataset, idx):
     both_sentences = get_both_sentences(dataset, idx)
     return "and" in both_sentences
 
+
 def has_or(dataset, idx):
     both_sentences = get_both_sentences(dataset, idx)
     return "or" in both_sentences
 
+
 def has_symbol(dataset, idx):
     both_sentences = get_both_sentences(dataset, idx)
     doc = nlp(both_sentences)
-    return any(
-        [x.pos_ == "SYM" for x, x_ent in zip(doc, doc.ents)]
-    )
+    return any([x.pos_ == "SYM" for x, x_ent in zip(doc, doc.ents)])
+
 
 def who_question(dataset, idx):
-    return 'who' in dataset.sentences[idx][0].lower()
+    return "who" in dataset.sentences[idx][0].lower()
+
 
 def what_question(dataset, idx):
-    return 'what' in dataset.sentences[idx][0].lower()
+    return "what" in dataset.sentences[idx][0].lower()
+
 
 def where_question(dataset, idx):
-    return 'where' in dataset.sentences[idx][0].lower()
+    return "where" in dataset.sentences[idx][0].lower()
+
 
 def when_question(dataset, idx):
-    return 'when' in dataset.sentences[idx][0].lower()
+    return "when" in dataset.sentences[idx][0].lower()
+
 
 def why_question(dataset, idx):
-    return 'why' in dataset.sentences[idx][0].lower()
+    return "why" in dataset.sentences[idx][0].lower()
+
 
 def how_question(dataset, idx):
-    return 'how' in dataset.sentences[idx][0].lower()
+    return "how" in dataset.sentences[idx][0].lower()
 
 
 def has_multiple_articles(dataset, idx):
@@ -510,30 +523,6 @@ def sports(dataset, idx):
     ]
     both_sentences = get_both_sentences(dataset, idx)
     return any([x in both_sentences for x in words])
-
-
-def who_question(dataset, idx):
-    return "who" in dataset.sentences[idx][0].lower()
-
-
-def what_question(dataset, idx):
-    return "what" in dataset.sentences[idx][0].lower()
-
-
-def where_question(dataset, idx):
-    return "where" in dataset.sentences[idx][0].lower()
-
-
-def when_question(dataset, idx):
-    return "when" in dataset.sentences[idx][0].lower()
-
-
-def why_question(dataset, idx):
-    return "why" in dataset.sentences[idx][0].lower()
-
-
-def how_question(dataset, idx):
-    return "how" in dataset.sentences[idx][0].lower()
 
 
 def non_question(dataset, idx):

@@ -11,7 +11,9 @@ from torch.utils.data.sampler import Sampler, SubsetRandomSampler
 from tqdm import tqdm
 
 from metal.mmtl.glue.glue_preprocess import get_task_tsv_config, load_tsv
-from metal.mmtl.glue.glue_slices import create_slice_labels # HACK: need this for cross val
+from metal.mmtl.glue.glue_slices import (  # HACK: need this for cross val
+    create_slice_labels,
+)
 from metal.utils import padded_tensor, set_seed
 
 nlp = spacy.load("en_core_web_sm")
@@ -111,7 +113,9 @@ class GLUEDataset(data.Dataset):
     def __len__(self):
         return len(self.bert_tokens)
 
-    def get_dataloader(self, split_prop=None, split_seed=123, slice_dict=None, **kwargs):
+    def get_dataloader(
+        self, split_prop=None, split_seed=123, slice_dict=None, **kwargs
+    ):
         """Returns a dataloader based on self (dataset). If split_prop is specified,
         returns a split dataset assuming train -> split_prop and dev -> 1 - split_prop."""
 
@@ -125,7 +129,7 @@ class GLUEDataset(data.Dataset):
             full_idx = np.arange(N)
             set_seed(split_seed)
 
-            # keep a list of slice idx that we need to keep in the train set 
+            # keep a list of slice idx that we need to keep in the train set
             # to maintain split prop
             if slice_dict:
                 reserved_train = set()
@@ -135,25 +139,33 @@ class GLUEDataset(data.Dataset):
                             continue
 
                         # WARNING: no shuffling before this!
-                        ind_labels = create_slice_labels(self, task_name, slice_name)["ind"]
+                        ind_labels = create_slice_labels(self, task_name, slice_name)[
+                            "ind"
+                        ]
                         slice_mask = np.array(ind_labels).squeeze() == 1
                         print(f"{slice_name} [{np.sum(slice_mask)}/{len(slice_mask)}]")
                         if np.sum(slice_mask) == 0:
                             continue
-                        # take the first split_prop num examples in the slice 
+                        # take the first split_prop num examples in the slice
                         slice_idx = full_idx[slice_mask]
                         num_to_choose = int(np.sum(slice_mask) * split_prop)
-                        train_slice_idx = set(np.random.choice(slice_idx, num_to_choose))
+                        train_slice_idx = set(
+                            np.random.choice(slice_idx, num_to_choose)
+                        )
 
                         # figure out if an example has already been chosen
-                        already_chosen = train_slice_idx.intersection(reserved_train) 
+                        already_chosen = train_slice_idx.intersection(reserved_train)
                         if len(already_chosen) > 0:
                             # remove already chosen count from the number we need to further sample
                             num_to_choose = len(train_slice_idx) - len(already_chosen)
 
-                            # choose from remaining examples 
-                            remaining_slice_idx = np.array(list(set(slice_idx)-already_chosen))
-                            train_slice_idx = set(np.random.choice(remaining_slice_idx, num_to_choose))
+                            # choose from remaining examples
+                            remaining_slice_idx = np.array(
+                                list(set(slice_idx) - already_chosen)
+                            )
+                            train_slice_idx = set(
+                                np.random.choice(remaining_slice_idx, num_to_choose)
+                            )
 
                         reserved_train = reserved_train.union(train_slice_idx)
 

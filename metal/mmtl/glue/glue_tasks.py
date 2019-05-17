@@ -54,7 +54,7 @@ task_defaults = {
     "max_len": 200,
     "max_datapoints": -1,
     "seed": None,
-    "split_seed": 1, # Used if slice_prop is specified
+    "split_seed": 1,  # Used if slice_prop is specified
     "preprocessed": False,  # If True, load the cached datasets with spacy tokens saved
     "dl_kwargs": {"batch_size": 16},
     "task_dl_kwargs": None,  # Overwrites dl kwargs e.g. {"STSB": {"batch_size": 2}}
@@ -192,8 +192,8 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
                 split_prop=float(config["split_prop"]),
                 splits=config["splits"],
                 # NOTE: this is different from seed - so we can init different models without affecting data
-                split_seed=config["split_seed"],  
-                slice_dict=config["slice_dict"]
+                split_seed=config["split_seed"],
+                slice_dict=config["slice_dict"],
             )
 
         if task_name == "COLA":
@@ -373,9 +373,7 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
 
         # Gather slice names
         if config["active_slice_heads"]:
-            slice_names = (
-                config["slice_dict"].get(task_name, [])
-            )
+            slice_names = config["slice_dict"].get(task_name, [])
         else:
             slice_names = []
 
@@ -494,7 +492,9 @@ def create_glue_datasets(
     return datasets
 
 
-def create_glue_dataloaders(datasets, dl_kwargs, split_prop, splits, split_seed=None, slice_dict=None):
+def create_glue_dataloaders(
+    datasets, dl_kwargs, split_prop, splits, split_seed=None, slice_dict=None
+):
     """ Initializes train/dev/test dataloaders given dataset_class"""
     dataloaders = {}
     split_shuffle = {"train": True, "valid": False, "test": False}
@@ -504,15 +504,13 @@ def create_glue_dataloaders(datasets, dl_kwargs, split_prop, splits, split_seed=
         dataloaders["train"], dataloaders["valid"] = datasets["train"].get_dataloader(
             split_prop=split_prop,
             split_seed=split_seed,
-            slice_dict=slice_dict, #HACK: for now -- split based on slice proportions
+            slice_dict=slice_dict,  # HACK: for now -- split based on slice proportions
             **dl_kwargs,
         )
 
         # Use the dev set as test set if available.
         if "valid" in datasets:
-            dataloaders["test"] = datasets["valid"].get_dataloader(
-                **dl_kwargs
-            )
+            dataloaders["test"] = datasets["valid"].get_dataloader(**dl_kwargs)
 
     # When split_prop is None, we use standard train/dev/test splits.
     else:
