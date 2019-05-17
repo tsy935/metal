@@ -74,9 +74,10 @@ class MmtlTest(unittest.TestCase):
         model = MetalModel(tasks, verbose=False)
         payloads = create_payloads(N, T, batch_size=2)
         metrics_dict = self.trainer.train_model(model, payloads)
-        self.assertEqual(len(metrics_dict), len(SPLITS) * T)
+        self.assertEqual(len(metrics_dict), len(SPLITS) * T + 1)
         for metric, score in metrics_dict.items():
-            self.assertGreater(score, 0.9)
+            if metric.split("/")[-1] != "loss":
+                self.assertGreater(score, 0.9)
 
     def test_mmtl_multitask(self):
         """Two tasks with two train payloads and two labelsets each"""
@@ -87,10 +88,11 @@ class MmtlTest(unittest.TestCase):
         model = MetalModel(tasks, verbose=False)
         payloads = create_payloads(N, T, batch_size=2)
         metrics_dict = self.trainer.train_model(model, payloads, verbose=False)
-        # For 3 payloads, each of 2 tasks each has 2 label sets
-        self.assertEqual(len(metrics_dict), len(SPLITS) * T ** 2)
+        # For 3 payloads, each of 2 tasks each has 2 label sets + 1 valid loss
+        self.assertEqual(len(metrics_dict), len(SPLITS) * T ** 2 + 1)
         for metric, score in metrics_dict.items():
-            self.assertGreater(score, 0.9)
+            if metric.split("/")[-1] != "loss":
+                self.assertGreater(score, 0.9)
 
 
 if __name__ == "__main__":
