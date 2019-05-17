@@ -12,7 +12,7 @@ from metal.mmtl.task import ClassificationTask, RegressionTask
 from metal.utils import convert_labels
 
 
-def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multiplier=1.0):
+def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multiplier=1.0, classification_task=BinaryClassificationTask):
     """Creates a slice task identical to a base task but with different head params"""
     # for pred head, copy the base task head to match the output labelspace
     if slice_head_type == "pred":
@@ -32,7 +32,7 @@ def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multipli
                 )
                 head_module = nn.Linear(head_module.in_features, 1)
 
-        slice_task = BinaryClassificationTask(
+        slice_task = classification_task(
             slice_task_name,
             input_module=unwrap_module(base_task.input_module),
             middle_module=unwrap_module(base_task.middle_module),
