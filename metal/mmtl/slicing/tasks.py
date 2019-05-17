@@ -87,16 +87,7 @@ def categorical_cross_entropy(X, Y):
     )
 
 def cross_entropy(X, Y):
-    #print('X', X['data'].shape)
-
     converted_Y = Y.flatten() - 1 
-    # print(converted_Y.shape)
-    # print('CONVERTYED: ', converted_Y)
-    # print('predictions: ', torch.argmax(output_hat_func_multiclass(X), dim=1))
-    # print('labels: ', converted_Y)
-    # print('X: ', X['data'].shape)
-    # print('X flattened: ', X['data'].flatten().shape)
-    # print('Y: ', converted_Y.shape)
     if X['data'].shape[1] == 1: #a bit hacky
         return F.binary_cross_entropy(torch.sigmoid(X["data"].flatten()), converted_Y.float())
     else:

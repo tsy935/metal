@@ -94,8 +94,6 @@ if __name__ == '__main__':
 	}	
 
 	for model_name, config in model_configs.items():
-	    # pretrained_input_module = resnet_model.input_modules['BirdClassificationTask'].module.module
-	    # pretrained_head_module = resnet_model.head_modules['BirdClassificationTask'].module.module
 	    
 
 	    print(f"{'='*10}Initializing + Training {model_name}{'='*10}")
