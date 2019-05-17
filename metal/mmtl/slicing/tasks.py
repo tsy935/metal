@@ -249,15 +249,14 @@ def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multipli
     elif slice_head_type == "ind":
         head_module = unwrap_module(base_task.head_module)
 
-        if classification_task == BinaryClassificationTask:
-            if isinstance(head_module, torch.nn.Linear):
-                if head_module.out_features != 1:
-                    print(
-                        f"Modifying {base_task.name} out_features from {head_module.out_features} -> 1"
-                    )
-                    head_module = nn.Linear(head_module.in_features, 1)
+        if isinstance(head_module, torch.nn.Linear):
+            if head_module.out_features != 1:
+                print(
+                    f"Modifying {base_task.name} out_features from {head_module.out_features} -> 1"
+                )
+                head_module = nn.Linear(head_module.in_features, 1)
 
-        slice_task = classification_task(
+        slice_task = BinaryClassificationTask(
             slice_task_name,
             input_module=unwrap_module(base_task.input_module),
             middle_module=unwrap_module(base_task.middle_module),
