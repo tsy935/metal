@@ -15,6 +15,7 @@ import os
 from pprint import pprint
 
 import numpy as np
+import torch
 
 from metal.mmtl.glue.glue_tasks import create_glue_tasks_payloads, task_defaults
 from metal.mmtl.metal_model import MetalModel, model_defaults
@@ -142,7 +143,7 @@ def main(args):
     # Initialize and train model
     if args.model_type == "moe":
         experts = {}
-        for slice_name in slice_dict[base_task_name]:
+        for model_num, slice_name in enumerate(slice_dict[base_task_name]):
             if slice_name == "BASE":
                 base_slice_name = f"{base_task_name}_slice:{slice_name}:pred"
                 for p in payloads:
@@ -164,8 +165,10 @@ def main(args):
             # remove the slice task labels from the payloads used to train the MoEModel.
             for p in payloads:
                 p.labels_to_tasks.pop(f"{base_task_name}_slice:{slice_name}:pred")
+            # rotate through all GPUs to allocate with models!
+            device = model_num % torch.cuda.device_count()
             # remove the first task (main task)
-            model = MetalModel(tasks_slice[1:], verbose=False)
+            model = MetalModel(tasks_slice[1:], verbose=False, device=device)
             trainer = MultitaskTrainer(seed=args.seed)
             metrics_dict = trainer.train_model(model, payloads_slice, **trainer_config)
             print(metrics_dict)
