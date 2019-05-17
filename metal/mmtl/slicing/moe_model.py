@@ -50,7 +50,9 @@ class MoEModel(MetalModel):
         # initialize Gating Network
         neck_dim = self.base_task.head_module.module.in_features
         num_experts = len(experts)
-        self.G = GatingNetwork(num_experts + neck_dim, num_experts)
+        self.G = GatingNetwork(
+            num_experts + neck_dim, num_experts, self.config["device"]
+        )
 
     def forward_body(self, X):
         """ Makes a forward pass through the "body" of the network
@@ -96,9 +98,10 @@ class GatingNetwork(nn.Module):
     outputs Softmaxed weights for each of the expert  models.
     """
 
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, device):
         super().__init__()
         self.fc = nn.Linear(input_dim, output_dim)
+        self.to(torch.device(f"cuda:{device}"))
 
     def forward(self, x):
         out = self.fc(x)
