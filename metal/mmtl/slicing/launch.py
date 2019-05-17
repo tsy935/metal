@@ -72,15 +72,25 @@ def main(args):
         run_name = f"{args.model_type}_{args.tasks}"
         trainer_config["writer_config"]["run_name"] = run_name
 
+    # Initialize trainer
+
     # Get model configs
     config = model_configs[args.model_type]
     active_slice_heads = config["active_slice_heads"]
     model_class = config["model_class"]
 
-    # Create tasks and payloads
     slice_dict = json.loads(args.slice_dict) if args.slice_dict else {}
     task_config.update({"slice_dict": slice_dict})
     task_config["active_slice_heads"] = active_slice_heads
+
+    # Initialize trainer and write configs
+    trainer = MultitaskTrainer(**trainer_config)
+    trainer._set_writer()
+    trainer.writer.write_config(model_config, "model_config")
+    trainer.writer.write_config(task_config, "task_config")
+    trainer.writer.write_config(vars(args), "args")
+
+    # Create tasks and payloads
     tasks, payloads = create_glue_tasks_payloads(task_names, **task_config)
 
     # Create evaluation payload with test_slices -> primary task head
@@ -90,6 +100,8 @@ def main(args):
         "pred": True,
         "ind": active_slice_heads.get("ind", False),
     }
+
+    # Initialize trainer
     slice_tasks, slice_payloads = create_glue_tasks_payloads(task_names, **task_config)
     pred_labelsets = [
         labelset
@@ -124,12 +136,6 @@ def main(args):
 
     # Initialize and train model
     model = model_class(tasks, **model_config)
-    trainer = MultitaskTrainer(**trainer_config)
-
-    # Write config files
-    trainer._set_writer()
-    trainer.writer.write_config(model_config, "model_config")
-    trainer.writer.write_config(task_config, "task_config")
 
     # train model
     trainer.train_model(model, payloads)
@@ -170,7 +176,7 @@ def get_parser():
     parser.add_argument(
         "--slice_loss_mult",
         type=str,
-        default=False,
+        default=None,
         help="Slice loss multipliers that override the default ones (1/num_slices).",
     )
     parser = add_flags_from_config(parser, trainer_defaults)
