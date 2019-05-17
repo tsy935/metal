@@ -328,6 +328,7 @@ class MultitaskTrainer(object):
         test_split = self.config["metrics_config"]["test_split"]
         metrics_dict = self.calculate_metrics(model, payloads, split=test_split)
         metrics_dict.update(self.calculate_metrics(model, payloads, split="train"))
+        metrics_dict.update(self.calculate_metrics(model, payloads, split="valid"))
         if self.config["verbose"]:
             pprint(metrics_dict)
 
