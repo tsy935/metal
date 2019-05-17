@@ -1,12 +1,10 @@
 """
 Example command to run all 9 tasks: python launch.py --tasks COLA,SST2,MNLI,RTE,WNLI,QQP,MRPC,STSB,QNLI --checkpoint_dir ckpt --batch_size 16
 """
-import faulthandler
-faulthandler.enable()
-
 import argparse
 import copy
 import datetime
+import faulthandler
 import json
 import logging
 import os
@@ -14,12 +12,20 @@ from time import strftime
 
 import numpy as np
 
-from metal.mmtl.cxr.cxr_tasks import create_tasks_and_payloads, task_defaults, add_slice_labels
+from metal.mmtl.cxr.cxr_tasks import (
+    add_slice_labels,
+    create_tasks_and_payloads,
+    task_defaults,
+)
 from metal.mmtl.metal_model import MetalModel, model_defaults
 from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
 from metal.utils import add_flags_from_config, recursive_merge_dicts
 
+faulthandler.enable()
+
+
 logging.basicConfig(level=logging.INFO)
+
 
 def get_dir_name(models_dir):
     """Gets a directory to save the model.
@@ -63,11 +69,8 @@ if __name__ == "__main__":
 
     # Slice only evaluation?
     parser.add_argument(
-        "--slice_eval",
-        type=int,
-        default=0,
-        help="True for loading model"
-        )    
+        "--slice_eval", type=int, default=0, help="True for loading model"
+    )
 
     # Training arguments
     parser.add_argument(
@@ -116,7 +119,7 @@ if __name__ == "__main__":
 
     # Getting tasks
     tasks, payloads = create_tasks_and_payloads(task_names, **task_config)
-    
+
     # TEST ASSERT FOR TASKS = TASKS IN PAYLOADS
     # np.array_equal(np.array([t.name for t in tasks]), np.array(payloads[0].task_names))
     model_config["verbose"] = False
@@ -157,12 +160,12 @@ if __name__ == "__main__":
     else:
         print("Running slice evaluation only...")
         # Writing output to log where model path was
-        slice_subdir = '/'.join(args.model_weights.split('/')[:-1])
-        trainer.writer.log_subdir = slice_subdir 
+        slice_subdir = "/".join(args.model_weights.split("/")[:-1])
+        trainer.writer.log_subdir = slice_subdir
 
     # evaluating slices after run complete
     slice_output = {}
-    test_splits = trainer_config['metrics_config']['test_split']
+    test_splits = trainer_config["metrics_config"]["test_split"]
     if isinstance(test_splits, str):
         test_splits = [test_splits]
     for split in test_splits:
@@ -173,29 +176,29 @@ if __name__ == "__main__":
         main_payload = copy.deepcopy(payloads[payload_ind])
         slice_output[split] = {}
         # Retargeting slices
-        for tsk, slices in task_config['slice_dict'].items():
+        for tsk, slices in task_config["slice_dict"].items():
             for slc in slices:
-                if not task_config['use_slices']:
-                    add_slice_labels(main_payload,tsk,slc)
+                if not task_config["use_slices"]:
+                    add_slice_labels(main_payload, tsk, slc)
                 main_payload.retarget_labelset(f"{tsk}:{slc}", tsk)
         # Scoring model
         main_dict = model.score(main_payload)
-        main_dict = {k:v for k,v in main_dict.items() if ":" in k}
+        main_dict = {k: v for k, v in main_dict.items() if ":" in k}
         # Printing results
         print(f"Evaluating slice performance on {split} split")
         print("Using main task heads:")
         print(main_dict)
         # Storing results
-        slice_output[split]["MAIN"]=main_dict
-        if task_config['use_slices']:
+        slice_output[split]["MAIN"] = main_dict
+        if task_config["use_slices"]:
             slc_dict = model.score(slice_payload)
-            slc_dict = {k:v for k,v in slc_dict.items() if ":" in k}
+            slc_dict = {k: v for k, v in slc_dict.items() if ":" in k}
             print("Using slice task heads:")
             print(slc_dict)
-            slice_output[split]["SLICE"]=slc_dict
+            slice_output[split]["SLICE"] = slc_dict
 
     # Writing slice evaluation
     slice_metrics_path = os.path.join(trainer.writer.log_subdir, "slice_metrics.json")
     print(f"Writing slice metrics to {slice_metrics_path}")
     with open(slice_metrics_path, "w") as f:
-        json.dump(slice_output, f, indent=1) 
+        json.dump(slice_output, f, indent=1)

@@ -111,4 +111,3 @@ class GatingNetwork(nn.Module):
         x = x.to(f"cuda:{self.device}")
         out = self.fc(x)
         return F.softmax(out, dim=1)
-
