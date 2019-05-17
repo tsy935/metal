@@ -28,11 +28,14 @@ def validate_slice_tasks(tasks):
     # validate base task
     if len(base_tasks) != 1:
         raise ValueError(f"SliceModel only supports 1 base task.")
-    base_task = base_tasks[0]
+    base_task = base_tasks[0]   
 
     # validate shared body representations
     # TODO: clean up these checks
     for t in slice_tasks:
+        print('task: ', t)
+        print('input: ', t.input_module)
+        print('base task: ', base_task.input_module)
         same_input = t.input_module is base_task.input_module
         same_middle = (
             (t.middle_module is None and base_task.middle_module is None)
