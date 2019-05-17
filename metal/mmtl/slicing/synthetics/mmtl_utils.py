@@ -16,6 +16,7 @@ from metal.mmtl.trainer import MultitaskTrainer
 
 def create_tasks(
     task_name,
+    rep_dim=5,
     slice_names=[],
     slice_weights={},
     create_ind=True,
@@ -25,9 +26,9 @@ def create_tasks(
     verbose=False,
     h_dim=None,
 ):
-    input_module = nn.Sequential(nn.Linear(2, 5), nn.ReLU())
+    input_module = nn.Sequential(nn.Linear(2, rep_dim), nn.ReLU())
     # NOTE: slice_model requires 1dim output head
-    head_module = nn.Linear(h_dim, 1) if h_dim else nn.Linear(5, 1)
+    head_module = nn.Linear(h_dim, 1) if h_dim else nn.Linear(rep_dim, 1)
 
     base_task = BinaryClassificationTask(
         name=task_name, input_module=input_module, head_module=head_module
@@ -59,7 +60,7 @@ def create_tasks(
                 "ind",
                 loss_multiplier=loss_multiplier,
             )
-            ind_head_module = MetalModuleWrapper(nn.Linear(5, 1))
+            ind_head_module = MetalModuleWrapper(nn.Linear(rep_dim, 1))
             slice_ind_task.head_module = ind_head_module
             tasks.append(slice_ind_task)
 
