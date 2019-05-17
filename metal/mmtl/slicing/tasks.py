@@ -87,10 +87,20 @@ def categorical_cross_entropy(X, Y):
     )
 
 def cross_entropy(X, Y):
+    #print('X', X['data'].shape)
+
     converted_Y = Y.flatten() - 1 
+    # print(converted_Y.shape)
+    # print('CONVERTYED: ', converted_Y)
     # print('predictions: ', torch.argmax(output_hat_func_multiclass(X), dim=1))
     # print('labels: ', converted_Y)
-    return F.cross_entropy(X['data'], converted_Y)
+    # print('X: ', X['data'].shape)
+    # print('X flattened: ', X['data'].flatten().shape)
+    # print('Y: ', converted_Y.shape)
+    if X['data'].shape[1] == 1: #a bit hacky
+        return F.binary_cross_entropy(torch.sigmoid(X["data"].flatten()), converted_Y.float())
+    else:
+        return F.cross_entropy(X['data'], converted_Y.long())
 
 class SliceRegressionTask(RegressionTask):
     """A regression task for use in an MMTL MetalModel"""
@@ -235,39 +245,64 @@ class MultiClassificationTask(ClassificationTask):
             f"{metal_repr[:-1]}, slice_head_type={self.slice_head_type})"
         )  # trim closing paren in repr')'
 
-def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multiplier=1.0, classification_task=BinaryClassificationTask):
+# def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multiplier=1.0, classification_task=BinaryClassificationTask):
+#     """Creates a slice task identical to a base task but with different head params"""
+#     # for pred head, copy the base task head to match the output labelspace
+#     if slice_head_type == "pred":
+#         slice_task = copy.copy(base_task)
+#         slice_task.name = slice_task_name
+#         slice_task.head_module = copy.deepcopy(base_task.head_module)
+#         slice_task.slice_head_type = slice_head_type
+#         slice_task.loss_multiplier = loss_multiplier
+
+#     # for ind heads, always initialize a binary class predictor
+#     elif slice_head_type == "ind":
+#         head_module = unwrap_module(base_task.head_module)
+
+#         if isinstance(head_module, torch.nn.Linear):
+#             if head_module.out_features != 1:
+#                 print(
+#                     f"Modifying {base_task.name} out_features from {head_module.out_features} -> 1"
+#                 )
+#                 head_module = nn.Linear(head_module.in_features, 1)
+
+#         slice_task = BinaryClassificationTask(
+#             slice_task_name,
+#             input_module=unwrap_module(base_task.input_module),
+#             middle_module=unwrap_module(base_task.middle_module),
+#             attention_module=unwrap_module(base_task.attention_module),
+#             head_module=head_module,
+#             loss_multiplier=loss_multiplier,
+#             slice_head_type=slice_head_type,
+#         )
+#     else:
+#         raise ValueError(f"Invalid slice_head_type: {slice_head_type}")
+
+#     return slice_task
+def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multiplier=1.0, classification_task=None):
     """Creates a slice task identical to a base task but with different head params"""
     # for pred head, copy the base task head to match the output labelspace
+    slice_task = copy.copy(base_task)
+    slice_task.name = slice_task_name
+    slice_task.slice_head_type = slice_head_type
+    slice_task.loss_multiplier = loss_multiplier
     if slice_head_type == "pred":
-        slice_task = copy.copy(base_task)
-        slice_task.name = slice_task_name
         slice_task.head_module = copy.deepcopy(base_task.head_module)
-        slice_task.slice_head_type = slice_head_type
-        slice_task.loss_multiplier = loss_multiplier
 
     # for ind heads, always initialize a binary class predictor
     elif slice_head_type == "ind":
         head_module = unwrap_module(base_task.head_module)
-
         if isinstance(head_module, torch.nn.Linear):
             if head_module.out_features != 1:
                 print(
                     f"Modifying {base_task.name} out_features from {head_module.out_features} -> 1"
                 )
-                head_module = nn.Linear(head_module.in_features, 1)
+                head_module = MetalModuleWrapper(nn.Linear(head_module.in_features, 1))
 
-        slice_task = BinaryClassificationTask(
-            slice_task_name,
-            input_module=unwrap_module(base_task.input_module),
-            middle_module=unwrap_module(base_task.middle_module),
-            attention_module=unwrap_module(base_task.attention_module),
-            head_module=head_module,
-            loss_multiplier=loss_multiplier,
-            slice_head_type=slice_head_type,
-        )
+        slice_task.head_module = head_module
+
     else:
         raise ValueError(f"Invalid slice_head_type: {slice_head_type}")
 
     return slice_task
-
 

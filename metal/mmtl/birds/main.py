@@ -80,9 +80,18 @@ if __name__ == '__main__':
 	#             'BASE': slice_loss_multiplier,
 	#             'slice_1': slice_loss_multiplier, 'slice_2': slice_loss_multiplier
 	#         },
-	        'h_dim': 2
 	    }
 	}
+	train_kwargs = {
+	    "lr": 0.01, 
+	#     "n_epochs": 600,
+	    "n_epochs": 30,
+	    "checkpoint_best": False,
+	    "log_every": 5.0,
+	    "writer": "tensorboard", 
+	    "verbose": True,
+	    "progress_bar": False
+	}	
 
 	for model_name, config in model_configs.items():
 	    # pretrained_input_module = resnet_model.input_modules['BirdClassificationTask'].module.module

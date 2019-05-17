@@ -33,9 +33,6 @@ def validate_slice_tasks(tasks):
     # validate shared body representations
     # TODO: clean up these checks
     for t in slice_tasks:
-        print('task: ', t)
-        print('input: ', t.input_module)
-        print('base task: ', base_task.input_module)
         same_input = t.input_module is base_task.input_module
         same_middle = (
             (t.middle_module is None and base_task.middle_module is None)
