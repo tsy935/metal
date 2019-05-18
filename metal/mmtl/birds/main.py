@@ -26,9 +26,6 @@ MODELS_DIR = opj(HOME_DIR, 'birds_models')
 
 
 
-
-
-
 if __name__ == '__main__':
 	print('Loading data...')
 	train_image_ids = torch.load(opj(TENSORS_DIR,'train_image_ids.pt'))
@@ -83,16 +80,18 @@ if __name__ == '__main__':
 	    }
 	}
 	train_kwargs = {
-	    "lr": 0.01, 
-	#     "n_epochs": 600,
+	    "lr": 0.001, 
 	    "n_epochs": 30,
 	    "checkpoint_best": False,
 	    "log_every": 5.0,
 	    "writer": "tensorboard", 
 	    "verbose": True,
-	    "progress_bar": False
-	}	
-
+	    "progress_bar": False,
+	    "lr_scheduler" :'reduce_on_plateau',
+    	"patience" : 10,
+    	"checkpoint_every" : 2,
+	}
+	trained_models = {}
 	for model_name, config in model_configs.items():
 	    
 
@@ -118,8 +117,12 @@ if __name__ == '__main__':
 	        metrics_dict = trainer.train_model(model, payloads, **expert_train_kwargs)
 	    else:
 	        model = model_class(tasks, h_dim=h_dim, verbose=True)
+	        #model.load_weights(opj(MODELS_DIR, 'resnet18_lr_1e-3_patience10_shuffled_fc_separated.pt'))
 	        trainer = MultitaskTrainer()
 	        metrics_dict = trainer.train_model(model, payloads, **train_kwargs)
+
+	    ind_head = False; pred_head = True
+	    tasks, payloads = create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_splits, image_id_splits, attrs_dict, resnet_model)
 	    print(metrics_dict) 
 	    trained_models[model_name] = model
 

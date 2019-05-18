@@ -3,7 +3,7 @@ import sys
 import metal
 import os
 import pickle
-
+from resnet import *
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,6 +14,11 @@ from pprint import pprint
 from metal.mmtl.slicing.tasks import *
 from metal.mmtl.metal_model import MetalModel 
 from metal.mmtl.trainer import MultitaskTrainer
+
+
+task_defaults = {
+	"active_slice_heads": {"ind": True, "pred": True},
+}
 
 
 
@@ -35,33 +40,35 @@ def get_slice_funcs(slice_names, attrs_dict):
 '''
 [slice_names] is a list of attribute ids
 '''
-def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_splits, image_id_splits, attrs_dict, model):
-	resnet_model = model
+def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_splits, image_id_splits, attrs_dict):
+	NUM_CLASSES = 200
+	resnet_model = resnet18(use_as_feature_extractor=True, pretrained=False).float().cuda()
+	#resnet_model.fc = nn.Linear(resnet_model.fc.in_features, NUM_CLASSES)
+	
 	task_name = 'BirdClassificationTask'
 	task0 = MultiClassificationTask(
 		name=task_name, 
 		input_module=resnet_model,
 		head_module=resnet_model.fc
 	)
-	task1 = MultiClassificationTask(
-		name=task_name + ':BASE', 
-		input_module=resnet_model,
-		head_module=resnet_model.fc
-	)
+	# task1 = MultiClassificationTask(
+	# 	name=task_name + ':BASE', 
+	# 	input_module=resnet_model,
+	# 	head_module=resnet_model.fc
+	# )
 	tasks = [task0]
 	loss_multiplier =  1.0 / (2 * (len(slice_names) +1 )) #+1 for Base
 
-	slice_task_name = f"{task_name}:BASE:ind"
-	slice_task = create_slice_task(task0, 
-									   slice_task_name, 
-									   slice_head_type='ind',
-									   loss_multiplier=loss_multiplier,
-									   #classification_task=MultiClassificationTask,
-									  )
-	tasks.append(slice_task)
-	
-	
-	
+
+	if ind_head:
+		slice_task_name = f"{task_name}:BASE:ind"
+		slice_task = create_slice_task(task0, 
+										   slice_task_name, 
+										   slice_head_type='ind',
+										   loss_multiplier=loss_multiplier,
+										   #classification_task=MultiClassificationTask,
+										  )
+		tasks.append(slice_task)
 
 
 	#generate slice tasks
@@ -91,6 +98,7 @@ def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_sp
 
 	payloads = []
 	splits = ["train", "valid", "test"]
+	splits_shuffle = [True, False, False]
 	train_image_ids, valid_image_ids, test_image_ids = image_id_splits
 	labels_to_tasks = {"labelset_gold": task_name}
 	#Create Payloads
@@ -106,10 +114,11 @@ def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_sp
 		else:
 			image_ids = test_image_ids
 
-		slice_labelset_name = f"labelset:BASE:ind"
-		slice_task_name = f"{task_name}:BASE:ind"
-		Y_dict[slice_labelset_name] = torch.ones(Y_splits[i].shape)
-		labels_to_tasks[slice_labelset_name] = slice_task_name
+		if ind_head:
+			slice_labelset_name = f"labelset:BASE:ind"
+			slice_task_name = f"{task_name}:BASE:ind"
+			Y_dict[slice_labelset_name] = torch.ones(Y_splits[i].shape)
+			labels_to_tasks[slice_labelset_name] = slice_task_name
 		
 
 		for attr_id in slice_names:
@@ -133,7 +142,7 @@ def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_sp
 				labels_to_tasks[slice_labelset_name] = slice_task_name
 
 		dataset = MmtlDataset(X_dict, Y_dict)
-		data_loader = MmtlDataLoader(dataset, batch_size=32)
+		data_loader = MmtlDataLoader(dataset, batch_size=32, shuffle=splits_shuffle[i])
 		payload = Payload(payload_name, data_loader, labels_to_tasks, splits[i])
 		payloads.append(payload)
 	
