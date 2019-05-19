@@ -120,7 +120,7 @@ def main(args):
     else:
         slice_names = [23, 24]
 
-    tasks, payloads = create_birds_tasks_payloads(slice_names, config['active_slice_heads']['ind'], config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict)
+    tasks, payloads = create_birds_tasks_payloads(slice_names, task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict)
 
     # Create evaluation payload with test_slices -> primary task head
     #task_config.update({"slice_dict": slice_dict})
@@ -129,7 +129,7 @@ def main(args):
         "pred": True,
         "ind": active_slice_heads.get("ind", False),
     }
-    slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, config['active_slice_heads']['ind'], config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict)
+    slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict)
     pred_labelsets = [
         labelset
         for labelset in slice_payloads[0].labels_to_tasks.keys()
@@ -162,8 +162,8 @@ def main(args):
                 )
 
     # Initialize and train model
-    print('tasks: ')
-    pprint(tasks)
+    print('slice_tasks: ')
+    pprint(slice_tasks)
     print('payloads: ')
     pprint(payloads)
     
