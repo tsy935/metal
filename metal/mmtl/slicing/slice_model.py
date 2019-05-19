@@ -14,7 +14,7 @@ from metal.utils import move_to_device
 def validate_slice_tasks(tasks):
     # validate slice head cardinality
     for t in tasks:
-        if t.head_module.module.out_features != 1:
+        if t.slice_head_type == "ind" and t.head_module.module.out_features != 1:
             raise ValueError(
                 f"{t.name}'s head_module is invalid. "
                 f"SliceModel only supports binary classification "
@@ -451,10 +451,6 @@ class SliceQPModel(MetalModel):
                 else:
                     self.slice_reps_ind.append(layer)
 
-        # TODO
-        # output_dim = unwrap_module(self.base_task.head_module).out_features
-        # self.shared_slice_pred_head = nn.Linear(h_dim, output_dim)
-
     def forward_body(self, X):
         """ Makes a forward pass through the "body" of the network
         (everything before the head)."""
@@ -484,18 +480,33 @@ class SliceQPModel(MetalModel):
             [slice_ind_heads[name]["data"] for name in self.slice_ind_names], dim=1
         )
 
+        b = slice_inds.shape[0]
         slice_preds = torch.cat(
-            [slice_pred_heads[name]["data"] for name in self.slice_pred_names], dim=1
+            [
+                slice_pred_heads[name]["data"].view(b, 1, -1)
+                for name in self.slice_pred_names
+            ],
+            dim=1,
         )
 
-        A_weights = slice_inds + torch.abs(slice_preds)
+        if slice_preds.shape[-1] > 1:
+            # if multiclass pred output...
+            # get the highest probability class's score, and convert to logit
+            prob = torch.max(F.softmax(slice_preds, dim=2), dim=2)[0]
+            pred_log_prob = torch.log(prob)
+        else:
+            pred_log_prob = slice_preds.squeeze()
+
+        pred_confidence = torch.abs(pred_log_prob)
+
+        # combine confidence with indicator score
+        A_weights = slice_inds + pred_confidence
         return A_weights
 
     def forward(self, X, task_names):
         """ Perform forward pass with slice-reweighted base representation through
         the base_task head. """
         body = self.forward_body(X)
-        # slice_ind_heads = self.forward_heads(body, self.slice_ind_names)
 
         # slice_weights is the [num_slices, body_dim] concatenated tensor
         # representing linear transforms for the body into the slice prediction values
