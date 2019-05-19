@@ -104,10 +104,12 @@ class GatingNetwork(nn.Module):
         super().__init__()
         self.device = device
         self.fc = nn.Linear(input_dim, output_dim)
-        self.to(torch.device(f"cuda:{self.device}"))
-        self.fc.to(torch.device(f"cuda:{self.device}"))
+        if device > 0:
+            self.to(torch.device(f"cuda:{self.device}"))
+            self.fc.to(torch.device(f"cuda:{self.device}"))
 
     def forward(self, x):
-        x = x.to(f"cuda:{self.device}")
+        if self.device > 0:
+            x = x.to(f"cuda:{self.device}")
         out = self.fc(x)
         return F.softmax(out, dim=1)
