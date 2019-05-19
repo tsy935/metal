@@ -44,28 +44,28 @@ def convert_to_slicing_tasks(tasks):
     """ Converts list of existing tasks into Slice-ready tasks (if applicable). """
     slicing_tasks = []
     for t in tasks:
-
         input_module = unwrap_module(t.input_module)
         middle_module = unwrap_module(t.middle_module)
         attention_module = unwrap_module(t.attention_module)
         head_module = unwrap_module(t.head_module)
 
-        # change all output_dims -> 1
-        if isinstance(head_module, torch.nn.Linear):
-            if head_module.out_features != 1:
-                print(
-                    f"Modifying {t.name} out_features from {head_module.out_features} -> 1"
-                )
-                head_module = nn.Linear(head_module.in_features, 1)
-        else:
-            raise ValueError(f"head_module for {t.name} is not a valid FC layer.")
-
+        # make sure slice_head_type is set
         if not hasattr(t, "slice_head_type"):
             head_type = None
         else:
             head_type = t.slice_head_type
+        t.slice_head_type = head_type
 
-        if isinstance(t, ClassificationTask):
+        # change all ind module output_dims -> 1
+        if head_type == "ind":
+            if isinstance(head_module, torch.nn.Linear):
+                if head_module.out_features != 1:
+                    print(
+                        f"Modifying {t.name} out_features from {head_module.out_features} -> 1"
+                    )
+                    head_module = nn.Linear(head_module.in_features, 1)
+            else:
+                raise ValueError(f"ind head for {t.name} is not a valid FC layer.")
 
             slice_t = BinaryClassificationTask(
                 t.name,
@@ -78,22 +78,8 @@ def convert_to_slicing_tasks(tasks):
                 slice_head_type=head_type,
             )
             slicing_tasks.append(slice_t)
-
-        elif isinstance(t, RegressionTask):
-            slice_t = SliceRegressionTask(
-                t.name,
-                input_module,
-                middle_module,
-                attention_module,
-                head_module,
-                loss_multiplier=t.loss_multiplier,
-                scorer=t.scorer,
-                slice_head_type=head_type,
-            )
-            slicing_tasks.append(slice_t)
-
         else:
-            raise ValueError(f"{t.__class__.__name__} is not supported!")
+            slicing_tasks.append(t)
 
     return slicing_tasks
 

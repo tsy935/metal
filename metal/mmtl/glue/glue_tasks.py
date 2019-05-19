@@ -92,7 +92,9 @@ task_defaults = {
     # Slicing
     "run_spacy": True,
     "slice_dict": None,  # A map of the slices that apply to each task
-    "active_slice_heads": {"ind": True, "pred": True},
+    # shared_pred indicates whether we should share a single module path
+    # for all preds; used for SliceQPModel
+    "active_slice_heads": {"ind": True, "pred": True, "shared_pred": False},
 }
 
 
@@ -384,16 +386,25 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
             if is_active
         ]
 
+        if "shared_pred" in active_slice_heads:
+            shared_pred_head_module = copy.deepcopy(task.head_module)
+
         for slice_name in slice_names:
             loss_multiplier = 1.0 / (len(active_slice_heads) * len(slice_names))
             slice_task_name = f"{task_name}_slice:{slice_name}"
             for slice_head_type in active_slice_heads:
-                slice_task = create_slice_task(
-                    task,
-                    f"{slice_task_name}:{slice_head_type}",
-                    slice_head_type,
-                    loss_multiplier=loss_multiplier,
-                )
+                if slice_head_type == "shared_pred":
+                    slice_task = copy.copy(task)
+                    slice_task.name = f"{slice_task_name}:{slice_head_type}"
+                    slice_task.slice_head_type = "pred"
+                    slice_task.head_module = shared_pred_head_module
+                else:
+                    slice_task = create_slice_task(
+                        task,
+                        f"{slice_task_name}:{slice_head_type}",
+                        slice_head_type,
+                        loss_multiplier=loss_multiplier,
+                    )
                 tasks.append(slice_task)
 
         if has_payload and not skip_payloads:
@@ -423,6 +434,10 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
                         labelset_slice_name = (
                             f"{task_name}_slice:{slice_name}:{slice_head_type}"
                         )
+
+                        if slice_head_type == "shared_pred":
+                            slice_head_type = "pred"
+
                         payload.add_label_set(
                             slice_task_name,
                             labelset_slice_name,

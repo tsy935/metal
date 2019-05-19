@@ -20,7 +20,7 @@ import torch
 from metal.mmtl.glue.glue_tasks import create_glue_tasks_payloads, task_defaults
 from metal.mmtl.metal_model import MetalModel, model_defaults
 from metal.mmtl.slicing.moe_model import MoEModel
-from metal.mmtl.slicing.slice_model import SliceModel, SliceRepModel
+from metal.mmtl.slicing.slice_model import SliceModel, SliceQPModel, SliceRepModel
 from metal.mmtl.slicing.tasks import convert_to_slicing_tasks
 from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
 from metal.utils import add_flags_from_config, recursive_merge_dicts
@@ -53,6 +53,10 @@ model_configs = {
     "soft_param_rep": {
         "model_class": SliceRepModel,
         "active_slice_heads": {"pred": False, "ind": True},
+    },
+    "slice_qp_model": {
+        "model_class": SliceQPModel,
+        "active_slice_heads": {"pred": False, "shared_pred": True, "ind": True},
     },
     "moe": {
         "model_class": MoEModel,
