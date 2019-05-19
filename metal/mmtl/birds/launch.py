@@ -67,11 +67,12 @@ IMAGES_DIR = opj(DATASET_DIR, 'images')
 TENSORS_DIR = opj(HOME_DIR, 'birds_data')
 
 
-
-
+def get_slices():
+    arr = np.loadtxt('slices.csv', delimiter=',', skiprows=1)
+    slices = arr[(arr[:,2] <= 10.0) & (arr[:,2] >= 1.0)][:,0] #get slices only between 1% and 10% in size
+    return slices.astype(int).tolist()
 
 def main(args):
-    
     print('Loading data...')
     train_image_ids = torch.load(opj(TENSORS_DIR,'train_image_ids.pt'))
     valid_image_ids = torch.load(opj(TENSORS_DIR,'valid_image_ids.pt'))
@@ -118,7 +119,7 @@ def main(args):
     if args.model_type == 'naive':
         slice_names = []
     else:
-        slice_names = [23, 24]
+        slice_names = get_slices()
 
     tasks, payloads = create_birds_tasks_payloads(slice_names, task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict)
 
@@ -169,7 +170,9 @@ def main(args):
     
     model = model_class(tasks, **model_config)
 
-    pretrained_naive_model_filepath = '/dfs/scratch1/saelig/slicing/metal/logs/2019_05_18/naive_BirdClassificationTask_16_50_40/model_checkpoint_30.006666666666668.pth'
+    #pretrained_naive_model_filepath = '/dfs/scratch1/saelig/slicing/metal/logs/2019_05_18/naive_BirdClassificationTask_16_50_40/model_checkpoint_30.006666666666668.pth'
+    #pretrained_naive_model_filepath = '/dfs/scratch1/saelig/slicing/metal/logs/2019_05_19/naive_BirdClassificationTask_00_18_53/model_checkpoint_25.006666666666668.pth'
+    pretrained_naive_model_filepath = args.pretrained_model
     model.load_weights(pretrained_naive_model_filepath)
 
     trainer = MultitaskTrainer(**trainer_config)
@@ -221,6 +224,13 @@ def get_parser():
         default=False,
         help="Slice loss multipliers that override the default ones (1/num_slices).",
     )
+    parser.add_argument(
+        "--pretrained_model",
+        type=str,
+        required=True,
+        help="filepath to pretrained naive model",
+    )
+
     parser = add_flags_from_config(parser, trainer_defaults)
     parser = add_flags_from_config(parser, model_defaults)
     parser = add_flags_from_config(parser, task_defaults)
