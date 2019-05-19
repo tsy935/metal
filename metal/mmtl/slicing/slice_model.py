@@ -451,10 +451,6 @@ class SliceQPModel(MetalModel):
                 else:
                     self.slice_reps_ind.append(layer)
 
-        # TODO
-        # output_dim = unwrap_module(self.base_task.head_module).out_features
-        # self.shared_slice_pred_head = nn.Linear(h_dim, output_dim)
-
     def forward_body(self, X):
         """ Makes a forward pass through the "body" of the network
         (everything before the head)."""
@@ -495,7 +491,6 @@ class SliceQPModel(MetalModel):
         """ Perform forward pass with slice-reweighted base representation through
         the base_task head. """
         body = self.forward_body(X)
-        # slice_ind_heads = self.forward_heads(body, self.slice_ind_names)
 
         # slice_weights is the [num_slices, body_dim] concatenated tensor
         # representing linear transforms for the body into the slice prediction values
