@@ -42,8 +42,8 @@ def get_slice_funcs(slice_names, attrs_dict):
 '''
 def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_splits, image_id_splits, attrs_dict):
 	NUM_CLASSES = 200
-	resnet_model = resnet18(use_as_feature_extractor=True, pretrained=False).float().cuda()
-	#resnet_model.fc = nn.Linear(resnet_model.fc.in_features, NUM_CLASSES)
+	resnet_model = resnet50(use_as_feature_extractor=True, pretrained=True).float().cuda()
+	resnet_model.fc = nn.Linear(resnet_model.fc.in_features, NUM_CLASSES)
 	
 	task_name = 'BirdClassificationTask'
 	task0 = MultiClassificationTask(
