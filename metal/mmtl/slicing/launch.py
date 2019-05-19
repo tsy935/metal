@@ -93,13 +93,6 @@ def main(args):
     task_config.update({"slice_dict": slice_dict})
     task_config["active_slice_heads"] = active_slice_heads
 
-    # Initialize trainer and write configs
-    trainer = MultitaskTrainer(**trainer_config)
-    trainer._set_writer()
-    trainer.writer.write_config(model_config, "model_config")
-    trainer.writer.write_config(task_config, "task_config")
-    trainer.writer.write_config(vars(args), "args")
-
     # Create tasks and payloads
     tasks, payloads = create_glue_tasks_payloads(task_names, **task_config)
 
@@ -184,7 +177,14 @@ def main(args):
         model = model_class(tasks, **model_config)
 
     # train model
+    trainer = MultitaskTrainer(**trainer_config)
     trainer.train_model(model, payloads)
+
+    # write configs
+    trainer._set_writer()
+    trainer.writer.write_config(model_config, "model_config")
+    trainer.writer.write_config(task_config, "task_config")
+    trainer.writer.write_config(vars(args), "args")
 
     # Evaluate trained model on slices
     model.eval()
