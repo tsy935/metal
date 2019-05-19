@@ -97,7 +97,7 @@ class SlicingTest(unittest.TestCase):
         for split in SPLITS:
             for labelset_name in labelset_names:
                 metrics_to_check.append(
-                    f"{task_name}/payload_{split}/{labelset_name}/accuracy"
+                    f"{task_name}/payload_{split}/{labelset_name}/f1"
                 )
 
         metrics_dict = self.trainer.train_model(model, payloads)
@@ -110,9 +110,8 @@ class SlicingTest(unittest.TestCase):
 
         # make sure we can fit this simple dataset
         for metric in metrics_to_check:
-            score = metrics_dict[metric]
-            print(metric, score)
-            self.assertGreater(score, 0.9)
+            f1_score = metrics_dict[metric]
+            self.assertGreater(f1_score, 0.85)
 
 
 if __name__ == "__main__":
