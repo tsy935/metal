@@ -30,7 +30,7 @@ def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multipli
                 print(
                     f"Modifying {base_task.name} out_features from {head_module.out_features} -> 1"
                 )
-                head_module = nn.Linear(head_module.in_features, 1)
+                head_module = MetalModuleWrapper(nn.Linear(head_module.in_features, 1))
 
         slice_task.head_module = head_module
 

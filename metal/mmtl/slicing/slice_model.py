@@ -387,7 +387,7 @@ class SliceRepModel(MetalModel):
 
         return Ys, A_weights
 
-
+import pdb
 class SliceQPModel(MetalModel):
     """ Slice-aware version of MetalModel.
 
@@ -397,8 +397,11 @@ class SliceQPModel(MetalModel):
     """
 
     def __init__(self, tasks, h_dim=None, **kwargs):
+        #pdb.set_trace()
         validate_slice_tasks(tasks)
         super().__init__(tasks, **kwargs)
+        #pdb.set_trace()
+
         self.base_task = [
             t for t in self.task_map.values() if t.slice_head_type is None
         ][0]
@@ -500,6 +503,7 @@ class SliceQPModel(MetalModel):
         pred_confidence = torch.abs(pred_log_prob)
 
         # combine confidence with indicator score
+        #pdb.set_trace()
         A_weights = slice_inds + pred_confidence
         return A_weights
 
