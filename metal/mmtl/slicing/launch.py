@@ -82,8 +82,6 @@ def main(args):
         run_name = f"{args.model_type}_{args.tasks}"
         trainer_config["writer_config"]["run_name"] = run_name
 
-    # Initialize trainer
-
     # Get model configs
     config = model_configs[args.model_type]
     active_slice_heads = config["active_slice_heads"]
@@ -155,6 +153,7 @@ def main(args):
             # remove the slice task labels from the payloads used to train the MoEModel.
             for p in payloads:
                 p.labels_to_tasks.pop(f"{base_task_name}_slice:{slice_name}:pred")
+
             # rotate through all GPUs to allocate with models!
             device = model_num % torch.cuda.device_count()
             # remove the first task (main task)

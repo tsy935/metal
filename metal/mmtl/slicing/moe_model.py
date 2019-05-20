@@ -49,9 +49,10 @@ class MoEModel(MetalModel):
 
         # initialize Gating Network
         neck_dim = self.base_task.head_module.module.in_features
+        output_dim = self.base_task.head_module.module.out_features
         num_experts = len(experts)
         self.G = GatingNetwork(
-            num_experts + neck_dim, num_experts, self.config["device"]
+            num_experts*output_dim + neck_dim, num_experts, self.config["device"]
         )
 
     def forward_body(self, X):
@@ -70,6 +71,7 @@ class MoEModel(MetalModel):
 
     def forward(self, X, task_names):
         X = move_to_device(X, self.config["device"])
+        b = X['data'].shape[0]
 
         # compute and collect all expert predictions
         expert_names = sorted(self.expert_task_map.keys())
@@ -79,18 +81,19 @@ class MoEModel(MetalModel):
             expert_pred = self.experts[expert_name](X, [expert_task_name])
             # even if experts are on different devices, make sure they end up on the same one
             expert_pred = move_to_device(expert_pred, self.config["device"])
+            # flatten all but batch
             pred_data = expert_pred[expert_task_name]["data"]
-            preds.append(pred_data)
+            preds.append(pred_data.view(b, -1, 1))
 
         # comptue weights for expert preds
-        expert_preds = torch.cat(preds, dim=1)
+        expert_preds = torch.cat(preds, dim=-1)
         body = self.forward_body(X)
 
-        gating_input = torch.cat((expert_preds, body["data"]), dim=1)
-        expert_weights = self.G(gating_input)
+        gating_input = torch.cat((expert_preds.view(b, -1), body["data"]), dim=1)
+        expert_weights = self.G(gating_input).view(b, 1, len(expert_names))
 
         # compute weighted average of expert preds
-        weighted_preds = (expert_weights * expert_preds).sum(1).reshape(-1, 1)
+        weighted_preds = (expert_weights * expert_preds).sum(2)
         output = {self.base_task.name: {"data": weighted_preds}}
         return output
 
