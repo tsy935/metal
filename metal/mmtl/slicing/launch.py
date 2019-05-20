@@ -141,13 +141,6 @@ def main(args):
     if args.model_type == "moe":
         experts = {}
         for model_num, slice_name in enumerate(slice_dict[base_task_name]):
-            if slice_name == "BASE":
-                base_slice_name = f"{base_task_name}_slice:{slice_name}:pred"
-                for p in payloads:
-                    # remove base task from moe payloads labels
-                    if base_slice_name in p.labels_to_tasks:
-                        p.labels_to_tasks.pop(base_slice_name)
-                continue
             task_config.update({"slice_dict": {base_task_name: [slice_name]}})
             tasks_slice, payloads_slice = create_glue_tasks_payloads(
                 task_names, **task_config
