@@ -121,9 +121,7 @@ if __name__ == "__main__":
         help="Config .json with fixed_args and search_space fields",
     )
     parser.add_argument(
-        "--device",
-        type=str,
-        help="Device to train on. See trainer kwargs for more.",
+        "--device", type=str, help="Device to train on. See trainer kwargs for more."
     )
     args = parser.parse_args()
     main(args)

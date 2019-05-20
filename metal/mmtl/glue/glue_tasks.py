@@ -54,7 +54,7 @@ task_defaults = {
     "max_len": 200,
     "max_datapoints": -1,
     "seed": None,
-    "split_seed": 1, # Used if slice_prop is specified
+    "split_seed": 1,  # Used if slice_prop is specified
     "preprocessed": False,  # If True, load the cached datasets with spacy tokens saved
     "dl_kwargs": {"batch_size": 16},
     "task_dl_kwargs": None,  # Overwrites dl kwargs e.g. {"STSB": {"batch_size": 2}}
@@ -92,7 +92,9 @@ task_defaults = {
     # Slicing
     "run_spacy": True,
     "slice_dict": None,  # A map of the slices that apply to each task
-    "active_slice_heads": {"ind": True, "pred": True},
+    # shared_pred indicates whether we should share a single module path
+    # for all preds; used for SliceQPModel
+    "active_slice_heads": {"ind": True, "pred": True, "shared_pred": False},
 }
 
 
@@ -192,8 +194,8 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
                 split_prop=float(config["split_prop"]),
                 splits=config["splits"],
                 # NOTE: this is different from seed - so we can init different models without affecting data
-                split_seed=config["split_seed"],  
-                slice_dict=config["slice_dict"]
+                split_seed=config["split_seed"],
+                slice_dict=config["slice_dict"],
             )
 
         if task_name == "COLA":
@@ -373,9 +375,7 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
 
         # Gather slice names
         if config["active_slice_heads"]:
-            slice_names = (
-                config["slice_dict"].get(task_name, [])
-            )
+            slice_names = config["slice_dict"].get(task_name, [])
         else:
             slice_names = []
 
@@ -386,16 +386,25 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
             if is_active
         ]
 
+        if "shared_pred" in active_slice_heads:
+            shared_pred_head_module = copy.deepcopy(task.head_module)
+
         for slice_name in slice_names:
             loss_multiplier = 1.0 / (len(active_slice_heads) * len(slice_names))
             slice_task_name = f"{task_name}_slice:{slice_name}"
             for slice_head_type in active_slice_heads:
-                slice_task = create_slice_task(
-                    task,
-                    f"{slice_task_name}:{slice_head_type}",
-                    slice_head_type,
-                    loss_multiplier=loss_multiplier,
-                )
+                if slice_head_type == "shared_pred":
+                    slice_task = copy.copy(task)
+                    slice_task.name = f"{slice_task_name}:{slice_head_type}"
+                    slice_task.slice_head_type = "pred"
+                    slice_task.head_module = shared_pred_head_module
+                else:
+                    slice_task = create_slice_task(
+                        task,
+                        f"{slice_task_name}:{slice_head_type}",
+                        slice_head_type,
+                        loss_multiplier=loss_multiplier,
+                    )
                 tasks.append(slice_task)
 
         if has_payload and not skip_payloads:
@@ -425,6 +434,10 @@ def create_glue_tasks_payloads(task_names, skip_payloads=False, **kwargs):
                         labelset_slice_name = (
                             f"{task_name}_slice:{slice_name}:{slice_head_type}"
                         )
+
+                        if slice_head_type == "shared_pred":
+                            slice_head_type = "pred"
+
                         payload.add_label_set(
                             slice_task_name,
                             labelset_slice_name,
@@ -494,7 +507,9 @@ def create_glue_datasets(
     return datasets
 
 
-def create_glue_dataloaders(datasets, dl_kwargs, split_prop, splits, split_seed=None, slice_dict=None):
+def create_glue_dataloaders(
+    datasets, dl_kwargs, split_prop, splits, split_seed=None, slice_dict=None
+):
     """ Initializes train/dev/test dataloaders given dataset_class"""
     dataloaders = {}
     split_shuffle = {"train": True, "valid": False, "test": False}
@@ -504,15 +519,13 @@ def create_glue_dataloaders(datasets, dl_kwargs, split_prop, splits, split_seed=
         dataloaders["train"], dataloaders["valid"] = datasets["train"].get_dataloader(
             split_prop=split_prop,
             split_seed=split_seed,
-            slice_dict=slice_dict, #HACK: for now -- split based on slice proportions
+            slice_dict=slice_dict,  # HACK: for now -- split based on slice proportions
             **dl_kwargs,
         )
 
         # Use the dev set as test set if available.
         if "valid" in datasets:
-            dataloaders["test"] = datasets["valid"].get_dataloader(
-                **dl_kwargs
-            )
+            dataloaders["test"] = datasets["valid"].get_dataloader(**dl_kwargs)
 
     # When split_prop is None, we use standard train/dev/test splits.
     else:

@@ -1,4 +1,5 @@
 import json
+import os
 import warnings
 
 import numpy as np
@@ -47,6 +48,29 @@ def more_people(dataset, idx):
 
 
 def short_premise(dataset, idx, thresh=15):
+    return len(dataset.sentences[idx][0].split()) <= thresh
+
+
+def short_premise_10(dataset, idx, thresh=10):
+    return short_premise(dataset, idx, thresh=thresh)
+
+
+def short_premise_5(dataset, idx, thresh=5):
+    return short_premise(dataset, idx, thresh=thresh)
+
+
+def common_words(dataset, idx, thresh=5):
+    return (
+        len(
+            set(dataset.sentences[idx][0].lower().split()).intersection(
+                set(dataset.sentences[idx][1].lower().split())
+            )
+        )
+        >= thresh
+    )
+
+
+def short_premise_cola(dataset, idx, thresh=5):
     return len(dataset.sentences[idx][0].split()) < thresh
 
 
@@ -74,16 +98,75 @@ def has_coordinating_conjunction_hypothesis(dataset, idx):
     return any([p in hypothesis for p in words])
 
 
+def has_coordinating_conjunction(dataset, idx):
+    words = ["and", "but", "or"]
+    both_sentences = get_both_sentences(dataset, idx)
+    return any([p in both_sentences for p in words])
+
+
+def ends_with_verb(dataset, idx):
+    doc = dataset.spacy_tokens[idx][0]
+    # last is punctuation, second to last for last word
+    return doc[-2].pos_ == "VERB"
+
+
+def ends_with_adverb(dataset, idx):
+    doc = dataset.spacy_tokens[idx][0]
+    # last is punctuation, second to last for last word
+    return doc[-2].pos_ == "ADV"
+
+
 def has_but(dataset, idx):
     both_sentences = get_both_sentences(dataset, idx)
     return "but" in both_sentences
 
 
+def has_and(dataset, idx):
+    both_sentences = get_both_sentences(dataset, idx)
+    return "and" in both_sentences
+
+
+def has_or(dataset, idx):
+    both_sentences = get_both_sentences(dataset, idx)
+    return "or" in both_sentences
+
+
+def has_symbol(dataset, idx):
+    both_sentences = get_both_sentences(dataset, idx)
+    doc = nlp(both_sentences)
+    return any([x.pos_ == "SYM" for x, x_ent in zip(doc, doc.ents)])
+
+
+def who_question(dataset, idx):
+    return "who" in dataset.sentences[idx][0].lower()
+
+
+def what_question(dataset, idx):
+    return "what" in dataset.sentences[idx][0].lower()
+
+
+def where_question(dataset, idx):
+    return "where" in dataset.sentences[idx][0].lower()
+
+
+def when_question(dataset, idx):
+    return "when" in dataset.sentences[idx][0].lower()
+
+
+def why_question(dataset, idx):
+    return "why" in dataset.sentences[idx][0].lower()
+
+
+def how_question(dataset, idx):
+    return "how" in dataset.sentences[idx][0].lower()
+
+
 def has_multiple_articles(dataset, idx):
     both_sentences = get_both_sentences(dataset, idx)
     multiple_a = sum([int(x == "a") for x in both_sentences.split()]) > 1
+    multiple_an = sum([int(x == "an") for x in both_sentences.split()]) > 1
     multiple_the = sum([int(x == "a") for x in both_sentences.split()]) > 1
-    return multiple_a or multiple_the
+    return multiple_a or multiple_an or multiple_the
 
 
 def has_numerical_date(dataset, idx):
@@ -296,6 +379,158 @@ def dash_semicolon(dataset, idx):
     bert_ints = dataset.bert_tokens[idx].tolist()
     bert_tokens = dataset.bert_tokenizer.convert_ids_to_tokens(bert_ints)
     return "-" in bert_tokens or ";" in bert_tokens
+
+
+question_type = dict()
+with open(
+    os.environ["METALHOME"] + "/metal/mmtl/slicing/qnli_question_type.txt", "r"
+) as read_file:
+    for line in read_file:
+        question, type = line.strip().split("######")
+        question_type[question] = int(type)
+
+    LABEL_MAPPING = {"unknown": 1, "what": 2, "who": 3, "when": 4, "affirmation": 5}
+
+
+def question_type_unknown(dataset, idx, type=1):
+    return (
+        dataset.sentences[idx][0] in question_type
+        and question_type[dataset.sentences[idx][0]] == type
+    )
+
+
+def question_type_what(dataset, idx, type=2):
+    return (
+        dataset.sentences[idx][0] in question_type
+        and question_type[dataset.sentences[idx][0]] == type
+    )
+
+
+def question_type_who(dataset, idx, type=3):
+    return (
+        dataset.sentences[idx][0] in question_type
+        and question_type[dataset.sentences[idx][0]] == type
+    )
+
+
+def question_type_when(dataset, idx, type=4):
+    return (
+        dataset.sentences[idx][0] in question_type
+        and question_type[dataset.sentences[idx][0]] == type
+    )
+
+
+def question_type_affirmation(dataset, idx, type=5):
+    return (
+        dataset.sentences[idx][0] in question_type
+        and question_type[dataset.sentences[idx][0]] == type
+    )
+
+
+def has_location(dataset, idx):
+    both_sentences = get_both_sentences(dataset, idx)
+    doc = nlp(both_sentences)
+    return any([x_ent.label_ == "GPE" for x, x_ent in zip(doc, doc.ents)])
+
+
+def in_asia(dataset, idx):
+    words = [
+        "azerbaijan",
+        "japan",
+        "qatar",
+        "armeniajordan",
+        "saudi",
+        "arabia",
+        "bahrain",
+        "kazakhstan",
+        "singapore",
+        "bangladesh",
+        "kuwait",
+        "south korea",
+        "bhutan",
+        "kyrgyzstan",
+        "sri lanka",
+        "brunei",
+        "laos",
+        "syria",
+        "burma",
+        "lebanon",
+        "taiwan",
+        "cambodia",
+        "malaysia",
+        "tajikistan",
+        "china",
+        "maldives",
+        "thailand",
+        "east timor",
+        "mongolia",
+        "turkey",
+        "india",
+        "nepal",
+        "turkmenistan",
+        "indonesia",
+        "north korea",
+        "united arab emirates",
+        "iran",
+        "oman",
+        "uzbekistan",
+        "iraq",
+        "pakistan",
+        "vietnam",
+        "israel",
+        "philippines",
+        "yemen",
+    ]
+    both_sentences = get_both_sentences(dataset, idx)
+    return any([x in both_sentences for x in words])
+
+
+def sports(dataset, idx):
+    words = [
+        "sport",
+        "sports",
+        "athletics",
+        "athletics",
+        "baseball",
+        "basketball",
+        "bowling",
+        "car racing",
+        "cycling",
+        "football",
+        "golf",
+        "gymnastics",
+        "handball",
+        "hang gliding",
+        "hockey",
+        "horse racing",
+        "jogging",
+        "motorcycle racing",
+        "para gliding",
+        "polo",
+        "rugby",
+        "scuba diving",
+        "skiing",
+        "skin diving",
+        "snow-boarding",
+        "soccer",
+        "softball",
+        "squash",
+        "swimming",
+        "table tennis",
+        "tennis",
+        "track and field",
+        "volleyball",
+    ]
+    both_sentences = get_both_sentences(dataset, idx)
+    return any([x in both_sentences for x in words])
+
+
+def non_question(dataset, idx):
+    question_words = set(["who", "what", "where", "when", "why", "how"])
+    for word in question_words:
+        if word in dataset.sentences[idx][0].lower():
+            return False
+    return True
 
 
 # Functions which map a payload and index with an indicator if that example is in slice
