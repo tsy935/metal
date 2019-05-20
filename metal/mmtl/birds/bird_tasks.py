@@ -71,7 +71,6 @@ def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_sp
 										   slice_task_name, 
 										   slice_head_type='ind',
 										   loss_multiplier=loss_multiplier,
-										   #classification_task=MultiClassificationTask,
 										  )
 		tasks.append(slice_task)
 
@@ -85,7 +84,6 @@ def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_sp
 										   slice_task_name, 
 										   slice_head_type='pred',
 										   loss_multiplier=loss_multiplier,
-										   #classification_task=MultiClassificationTask,
 										  )
 			tasks.append(slice_task)
 
@@ -97,7 +95,6 @@ def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_sp
 										   slice_task_name, 
 										   slice_head_type='ind',
 										   loss_multiplier=loss_multiplier,
-										   #classification_task=MultiClassificationTask
 										  )
 			tasks.append(slice_task)
 

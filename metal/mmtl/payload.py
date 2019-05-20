@@ -106,7 +106,7 @@ class Payload(object):
                     f"(originally, {old_task})."
                 )
 
-    def remap_labelsets(self, labels_to_tasks, default_none=False):
+    def remap_labelsets(self, labels_to_tasks, default_none=False, verbose=True):
         """ Remaps payload.labels_to_tasks based on specified dictionary. All other
             defaults to `labelset` -> `None`.
 
@@ -119,7 +119,7 @@ class Payload(object):
         for label_name in test_labelsets:
             if label_name in labels_to_tasks:
                 new_task = labels_to_tasks[label_name]
-                self._retarget_labelset(label_name, new_task)
+                self._retarget_labelset(label_name, new_task, verbose=verbose)
             else:
                 if default_none:
-                    self._retarget_labelset(label_name, None)
+                    self._retarget_labelset(label_name, None, verbose=verbose)

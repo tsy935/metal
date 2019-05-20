@@ -1,9 +1,10 @@
 import cxr_dataset as CXR
 import pandas as pd
 import torch
-from metal.end_model import EndModel
 from torch import nn
 from torchvision import transforms
+
+from metal.end_model import EndModel
 
 
 def fetch_dataloader(
@@ -14,7 +15,8 @@ def fetch_dataloader(
     std = [0.229, 0.224, 0.225]
 
     # load labels
-    df = pd.read_csv("nih_labels.csv", index_col=0)
+    # TODO: @JD this was breaking tests
+    # df = pd.read_csv("nih_labels.csv", index_col=0)
 
     # define torchvision transforms
     data_transforms = {

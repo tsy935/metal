@@ -15,10 +15,12 @@ import os
 from pprint import pprint
 
 import numpy as np
+import torch
 
 from metal.mmtl.glue.glue_tasks import create_glue_tasks_payloads, task_defaults
 from metal.mmtl.metal_model import MetalModel, model_defaults
-from metal.mmtl.slicing.slice_model import SliceModel, SliceRepModel
+from metal.mmtl.slicing.moe_model import MoEModel
+from metal.mmtl.slicing.slice_model import SliceModel, SliceQPModel, SliceRepModel
 from metal.mmtl.slicing.tasks import convert_to_slicing_tasks
 from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
 from metal.utils import add_flags_from_config, recursive_merge_dicts
@@ -52,6 +54,14 @@ model_configs = {
         "model_class": SliceRepModel,
         "active_slice_heads": {"pred": False, "ind": True},
     },
+    "slice_qp_model": {
+        "model_class": SliceQPModel,
+        "active_slice_heads": {"pred": False, "shared_pred": True, "ind": True},
+    },
+    "moe": {
+        "model_class": MoEModel,
+        "active_slice_heads": {"pred": True, "ind": False},
+    },
 }
 
 
@@ -77,10 +87,11 @@ def main(args):
     active_slice_heads = config["active_slice_heads"]
     model_class = config["model_class"]
 
-    # Create tasks and payloads
     slice_dict = json.loads(args.slice_dict) if args.slice_dict else {}
     task_config.update({"slice_dict": slice_dict})
     task_config["active_slice_heads"] = active_slice_heads
+
+    # Create tasks and payloads
     tasks, payloads = create_glue_tasks_payloads(task_names, **task_config)
 
     # Create evaluation payload with test_slices -> primary task head
@@ -90,6 +101,8 @@ def main(args):
         "pred": True,
         "ind": active_slice_heads.get("ind", False),
     }
+
+    # Initialize trainer
     slice_tasks, slice_payloads = create_glue_tasks_payloads(task_names, **task_config)
     pred_labelsets = [
         labelset
@@ -115,7 +128,7 @@ def main(args):
         )
         for task in tasks:
             if task.name in slice_loss_mult.keys():
-                task.loss_multiplier = slice_loss_mult[task.name]
+                task.loss_multiplier *= slice_loss_mult[task.name]
                 print(
                     "Override {} loss multiplier with{}.".format(
                         task.name, slice_loss_mult[task.name]
@@ -123,16 +136,47 @@ def main(args):
                 )
 
     # Initialize and train model
-    model = model_class(tasks, **model_config)
-    trainer = MultitaskTrainer(**trainer_config)
+    if args.model_type == "moe":
+        experts = {}
+        for model_num, slice_name in enumerate(slice_dict[base_task_name]):
+            task_config.update({"slice_dict": {base_task_name: [slice_name]}})
+            tasks_slice, payloads_slice = create_glue_tasks_payloads(
+                task_names, **task_config
+            )
+            tasks_slice = convert_to_slicing_tasks(tasks_slice)
+            print(tasks_slice)
+            print(payloads_slice)
 
-    # Write config files
+            # remove the base task labels from the expert payloads.
+            for p in payloads_slice:
+                p.labels_to_tasks.pop(f"{base_task_name}_gold")
+            # remove the slice task labels from the payloads used to train the MoEModel.
+            for p in payloads:
+                p.labels_to_tasks.pop(f"{base_task_name}_slice:{slice_name}:pred")
+
+            # rotate through all GPUs to allocate with models!
+            device = model_num % torch.cuda.device_count()
+            # remove the first task (main task)
+            model = MetalModel(tasks_slice[1:], verbose=False, device=device)
+            trainer = MultitaskTrainer(seed=args.seed)
+            metrics_dict = trainer.train_model(model, payloads_slice, **trainer_config)
+            print(metrics_dict)
+            experts[slice_name] = model
+        # MoEModel takes one base task
+        model = model_class([tasks[0]], experts, **model_config)
+    else:
+        # Initialize and train model
+        model = model_class(tasks, **model_config)
+
+    # train model
+    trainer = MultitaskTrainer(**trainer_config)
+    trainer.train_model(model, payloads)
+
+    # write configs
     trainer._set_writer()
     trainer.writer.write_config(model_config, "model_config")
     trainer.writer.write_config(task_config, "task_config")
-
-    # train model
-    trainer.train_model(model, payloads)
+    trainer.writer.write_config(vars(args), "args")
 
     # Evaluate trained model on slices
     model.eval()
@@ -170,7 +214,7 @@ def get_parser():
     parser.add_argument(
         "--slice_loss_mult",
         type=str,
-        default=False,
+        default=None,
         help="Slice loss multipliers that override the default ones (1/num_slices).",
     )
     parser = add_flags_from_config(parser, trainer_defaults)

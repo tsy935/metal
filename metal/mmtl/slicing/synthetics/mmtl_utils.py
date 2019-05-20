@@ -16,22 +16,32 @@ from metal.mmtl.trainer import MultitaskTrainer
 
 def create_tasks(
     task_name,
+    rep_dim=5,
     slice_names=[],
     slice_weights={},
     create_ind=True,
     create_preds=True,
     create_base=True,
+    create_shared_slice_pred=False,
+    use_ind_module=False,
     custom_neck_dim=None,
     verbose=False,
     h_dim=None,
 ):
-    input_module = nn.Sequential(nn.Linear(2, 5), nn.ReLU())
+    input_module = nn.Sequential(nn.Linear(2, rep_dim), nn.ReLU())
     # NOTE: slice_model requires 1dim output head
-    head_module = nn.Linear(h_dim, 1) if h_dim else nn.Linear(5, 1)
+    head_input_dim = h_dim if h_dim else rep_dim
+    head_module = nn.Linear(head_input_dim, 1)
 
     base_task = BinaryClassificationTask(
         name=task_name, input_module=input_module, head_module=head_module
     )
+
+    if create_shared_slice_pred:
+        shared_slice_pred_task = copy.copy(base_task)
+        shared_slice_head = copy.deepcopy(head_module)
+        shared_slice_pred_task.head_module = MetalModuleWrapper(shared_slice_head)
+        shared_slice_pred_task.slice_head_type = "pred"
 
     tasks = []
     # for each slice create an 'ind' task: predicts whether we are in the slice
@@ -43,7 +53,12 @@ def create_tasks(
             loss_multiplier = slice_weights[slice_name]
         else:
             loss_multiplier = 1.0
-        if create_preds:
+
+        if create_shared_slice_pred:
+            curr_pred_task = copy.copy(shared_slice_pred_task)
+            curr_pred_task.name = f"{task_name}:{slice_name}:pred"
+            tasks.append(curr_pred_task)
+        elif create_preds:
             slice_pred_task = create_slice_task(
                 base_task,
                 f"{task_name}:{slice_name}:pred",
@@ -59,7 +74,11 @@ def create_tasks(
                 "ind",
                 loss_multiplier=loss_multiplier,
             )
-            ind_head_module = MetalModuleWrapper(nn.Linear(5, 1))
+
+            if use_ind_module:
+                ind_head_module = MetalModuleWrapper(nn.Linear(head_input_dim, 1))
+            else:
+                ind_head_module = MetalModuleWrapper(nn.Linear(rep_dim, 1))
             slice_ind_task.head_module = ind_head_module
             tasks.append(slice_ind_task)
 
@@ -91,6 +110,7 @@ def create_payloads(
     create_ind=True,
     create_preds=True,
     create_base=True,
+    create_shared_slice_pred=False,
     verbose=False,
 ):
 
@@ -102,6 +122,8 @@ def create_payloads(
         # convert to torch tensors
         X_dict = {"data": torch.Tensor(Xs[i]), "uids": torch.Tensor(uid_lists[i])}
         Y_dict = {"labelset_gold": torch.Tensor(Ys[i])} if create_base else {}
+        if create_shared_slice_pred:
+            create_preds = True
 
         if slice_funcs:
             slice_labels = generate_slice_labels(
