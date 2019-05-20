@@ -120,8 +120,11 @@ def main(args):
         slice_names = []
     else:
         slice_names = get_slices()
+        #slice_names = [233,247,57]
 
-    tasks, payloads = create_birds_tasks_payloads(slice_names, task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict)
+    print('number of slices: ', len(slice_names))
+
+    tasks, payloads = create_birds_tasks_payloads(slice_names, task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict, seed=task_config['seed'] )
 
     # Create evaluation payload with test_slices -> primary task head
     #task_config.update({"slice_dict": slice_dict})
@@ -130,7 +133,11 @@ def main(args):
         "pred": True,
         "ind": active_slice_heads.get("ind", False),
     }
-    slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict)
+    #compute baseline numbers for all slices for each comparison
+    if args.model_type == 'naive':
+        slice_tasks, slice_payloads = create_birds_tasks_payloads(list(range(1,313)), task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict, seed=task_config['seed'])
+    else: #just evaluate on the slices of interest
+        slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict, seed=task_config['seed'])
     pred_labelsets = [
         labelset
         for labelset in slice_payloads[0].labels_to_tasks.keys()
@@ -172,8 +179,10 @@ def main(args):
 
     #pretrained_naive_model_filepath = '/dfs/scratch1/saelig/slicing/metal/logs/2019_05_18/naive_BirdClassificationTask_16_50_40/model_checkpoint_30.006666666666668.pth'
     #pretrained_naive_model_filepath = '/dfs/scratch1/saelig/slicing/metal/logs/2019_05_19/naive_BirdClassificationTask_00_18_53/model_checkpoint_25.006666666666668.pth'
-    pretrained_naive_model_filepath = args.pretrained_model
-    model.load_weights(pretrained_naive_model_filepath)
+    if args.model_type != 'naive':
+        print('Loading weights from pretrained naive model')
+        pretrained_naive_model_filepath = args.pretrained_model
+        model.load_weights(pretrained_naive_model_filepath)
 
     trainer = MultitaskTrainer(**trainer_config)
 
@@ -227,7 +236,7 @@ def get_parser():
     parser.add_argument(
         "--pretrained_model",
         type=str,
-        required=True,
+        required=False,
         help="filepath to pretrained naive model",
     )
 

@@ -14,10 +14,12 @@ from pprint import pprint
 from metal.mmtl.slicing.tasks import *
 from metal.mmtl.metal_model import MetalModel 
 from metal.mmtl.trainer import MultitaskTrainer
+from metal.utils import set_seed
 
 
 task_defaults = {
 	"active_slice_heads": {"ind": True, "pred": True},
+	"seed" : None,
 }
 
 
@@ -40,11 +42,14 @@ def get_slice_funcs(slice_names, attrs_dict):
 '''
 [slice_names] is a list of attribute ids
 '''
-def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_splits, image_id_splits, attrs_dict):
+def create_birds_tasks_payloads(slice_names, ind_head, pred_head, X_splits, Y_splits, image_id_splits, attrs_dict, seed):
+	set_seed(seed)
+	
 	NUM_CLASSES = 200
 	resnet_model = resnet50(use_as_feature_extractor=True, pretrained=True).float().cuda()
 	resnet_model.fc = nn.Linear(resnet_model.fc.in_features, NUM_CLASSES)
 	
+
 	task_name = 'BirdClassificationTask'
 	task0 = MultiClassificationTask(
 		name=task_name, 
