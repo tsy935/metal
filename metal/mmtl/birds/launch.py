@@ -23,7 +23,8 @@ sys.path.append('../../../../metal')
 
 from metal.mmtl.birds.bird_tasks import create_birds_tasks_payloads, task_defaults
 from metal.mmtl.metal_model import MetalModel, model_defaults
-from metal.mmtl.slicing.slice_model import SliceModel, SliceRepModel
+from metal.mmtl.slicing.slice_model import *
+from metal.mmtl.slicing.moe_model import MoEModel
 from metal.mmtl.slicing.tasks import convert_to_slicing_tasks
 from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
 from metal.utils import add_flags_from_config, recursive_merge_dicts
@@ -40,22 +41,30 @@ trainer_defaults["writer"] = "tensorboard"
 
 # Model configs
 model_configs = {
-    "naive": {"model_class": MetalModel, "active_slice_heads": {"pred": False, "ind": False}},
+    "naive": {"model_class": MetalModel, "active_slice_heads": {}},
     "hard_param": {
         "model_class": MetalModel,
-        "active_slice_heads": {"pred": True, "ind": False},
+        "active_slice_heads": {"pred": True, "shared_pred": False, "ind": False},
     },
     "manual": {
         "model_class": MetalModel,
-        "active_slice_heads": {"pred": True, "ind": False},
+        "active_slice_heads": {"pred": True, "shared_pred": False, "ind": False},
     },
     "soft_param": {
         "model_class": SliceModel,
-        "active_slice_heads": {"pred": True, "ind": True},
+        "active_slice_heads": {"pred": True, "shared_pred": False, "ind": True},
     },
     "soft_param_rep": {
         "model_class": SliceRepModel,
-        "active_slice_heads": {"pred": False, "ind": True},
+        "active_slice_heads": {"pred": False, "shared_pred": False, "ind": True},
+    },
+    "slice_qp_model": {
+        "model_class": SliceQPModel,
+        "active_slice_heads": {"pred": False, "shared_pred": True, "ind": True},
+    },
+    "moe": {
+        "model_class": MoEModel,
+        "active_slice_heads": {"pred": True, "shared_pred": False, "ind": False},
     },
 }
 
@@ -116,28 +125,33 @@ def main(args):
     #task_config.update({"slice_dict": slice_dict})
     task_config["active_slice_heads"] = active_slice_heads
 
+
     if args.model_type == 'naive':
         slice_names = []
     else:
-        slice_names = get_slices()
+        if not args.slices:
+            raise ValueError('Need to provide a list of slices!')
+        slice_names = args.slices
         #slice_names = [233,247,57]
 
-    print('number of slices: ', len(slice_names))
+    print('Using {} slices: {}'.format(len(slice_names), slice_names))
 
-    tasks, payloads = create_birds_tasks_payloads(slice_names, task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict, seed=task_config['seed'] )
+    tasks, payloads = create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
 
+    print('tasks: ', tasks)
     # Create evaluation payload with test_slices -> primary task head
     #task_config.update({"slice_dict": slice_dict})
     task_config["active_slice_heads"] = {
         # turn pred labelsets on, and use model's value for ind head
         "pred": True,
         "ind": active_slice_heads.get("ind", False),
+        'shared_pred' : active_slice_heads.get('shared_pred', False)
     }
     #compute baseline numbers for all slices for each comparison
     if args.model_type == 'naive':
-        slice_tasks, slice_payloads = create_birds_tasks_payloads(list(range(1,313)), task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict, seed=task_config['seed'])
+        slice_tasks, slice_payloads = create_birds_tasks_payloads(list(range(1,313)), X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
     else: #just evaluate on the slices of interest
-        slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, task_config['active_slice_heads']['ind'], task_config['active_slice_heads']['pred'], X_splits, Y_splits, image_id_splits, attrs_dict, seed=task_config['seed'])
+        slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
     pred_labelsets = [
         labelset
         for labelset in slice_payloads[0].labels_to_tasks.keys()
@@ -239,6 +253,14 @@ def get_parser():
         required=False,
         help="filepath to pretrained naive model",
     )
+
+    parser.add_argument(
+        '--slices',
+        nargs='+',
+        type=int,
+        required=False,
+        help='list of attr ids'
+        )
 
     parser = add_flags_from_config(parser, trainer_defaults)
     parser = add_flags_from_config(parser, model_defaults)
