@@ -262,6 +262,7 @@ def get_parser():
         help='list of attr ids'
         )
 
+
     parser = add_flags_from_config(parser, trainer_defaults)
     parser = add_flags_from_config(parser, model_defaults)
     parser = add_flags_from_config(parser, task_defaults)
