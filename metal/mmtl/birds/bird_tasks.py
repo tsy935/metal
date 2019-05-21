@@ -21,6 +21,7 @@ import copy
 task_defaults = {
 	"active_slice_heads": {"ind": True, "pred": True},
 	"seed" : None,
+	'batch_size' : 32,
 }
 
 
@@ -94,14 +95,14 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 	# 	slice_task.head_module = shared_pred_head_module
 	# 	tasks.append(slice_task)
 
-	if task_config['active_slice_heads']['shared_pred']:
+	if task_config['active_slice_heads'].get('shared_pred'):
 		shared_pred_head_module = copy.deepcopy(task0.head_module)
 
 
 	#generate slice tasks
 	for attr_id in slice_names:
 		###For pred slice head type
-		if task_config['active_slice_heads']['pred']:
+		if task_config['active_slice_heads'].get('pred'):
 			slice_task_name = f"{task_name}:{attr_id}:pred"
 			slice_task = create_slice_task(task0, 
 										   slice_task_name, 
@@ -112,7 +113,7 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 
 
 		###For ind slice head type
-		if task_config['active_slice_heads']['ind']:
+		if task_config['active_slice_heads'].get('ind'):
 			slice_task_name = f"{task_name}:{attr_id}:ind"
 			slice_task = create_slice_task(task0, 
 										   slice_task_name, 
@@ -122,7 +123,7 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 			tasks.append(slice_task)
 
 		###For shared pred slice head type
-		if task_config['active_slice_heads']['shared_pred']:
+		if task_config['active_slice_heads'].get('shared_pred'):
 			slice_task = copy.copy(task0)
 			slice_task.name = f"{task_name}:{attr_id}:shared_pred"
 			slice_task.slice_head_type = 'pred'
@@ -164,14 +165,14 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 				mask = torch.tensor(mask)
 			
 			###For pred slice head type
-			if task_config['active_slice_heads']['pred']:
+			if task_config['active_slice_heads'].get('pred'):
 				slice_labelset_name = f"labelset:{attr_id}:pred"
 				slice_task_name = f"{task_name}:{attr_id}:pred"
 				Y_dict[slice_labelset_name] = mask * Y_splits[i]
 				labels_to_tasks[slice_labelset_name] = slice_task_name
 
 			###for shared pred head type
-			if task_config['active_slice_heads']['shared_pred']:
+			if task_config['active_slice_heads'].get('shared_pred'):
 				slice_labelset_name = f"labelset:{attr_id}:shared_pred"
 				slice_task_name = f"{task_name}:{attr_id}:shared_pred"
 				Y_dict[slice_labelset_name] = mask * Y_splits[i]
@@ -179,7 +180,7 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 
 
 			###For ind slice head type
-			if task_config['active_slice_heads']['ind']:
+			if task_config['active_slice_heads'].get('ind'):
 				mask[mask == 0] = 2 #to follow Metal convention
 				slice_labelset_name = f"labelset:{attr_id}:ind"
 				slice_task_name = f"{task_name}:{attr_id}:ind"
@@ -187,7 +188,7 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 				labels_to_tasks[slice_labelset_name] = slice_task_name
 
 		dataset = MmtlDataset(X_dict, Y_dict)
-		data_loader = MmtlDataLoader(dataset, batch_size=32, shuffle=splits_shuffle[i])
+		data_loader = MmtlDataLoader(dataset, batch_size=task_config['batch_size'], shuffle=splits_shuffle[i])
 		payload = Payload(payload_name, data_loader, labels_to_tasks, splits[i])
 		payloads.append(payload)
 	

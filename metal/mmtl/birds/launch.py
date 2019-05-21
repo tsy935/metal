@@ -186,14 +186,14 @@ def main(args):
     # Initialize and train model
     print('slice_tasks: ')
     pprint(slice_tasks)
-    print('payloads: ')
-    pprint(payloads)
+    print('slice payloads: ')
+    pprint(slice_payloads)
     
     model = model_class(tasks, **model_config)
 
     #pretrained_naive_model_filepath = '/dfs/scratch1/saelig/slicing/metal/logs/2019_05_18/naive_BirdClassificationTask_16_50_40/model_checkpoint_30.006666666666668.pth'
     #pretrained_naive_model_filepath = '/dfs/scratch1/saelig/slicing/metal/logs/2019_05_19/naive_BirdClassificationTask_00_18_53/model_checkpoint_25.006666666666668.pth'
-    if args.model_type != 'naive':
+    if args.pretrained_model:
         print('Loading weights from pretrained naive model')
         pretrained_naive_model_filepath = args.pretrained_model
         model.load_weights(pretrained_naive_model_filepath)
