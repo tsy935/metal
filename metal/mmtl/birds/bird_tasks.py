@@ -15,7 +15,7 @@ from metal.mmtl.slicing.tasks import *
 from metal.mmtl.metal_model import MetalModel 
 from metal.mmtl.trainer import MultitaskTrainer
 from metal.utils import set_seed
-
+import pdb
 import copy
 
 task_defaults = {
@@ -66,12 +66,12 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 	# 	head_module=resnet_model.fc
 	# )
 	tasks = [task0]
-	slice_names.append('BASE')
-
+	slice_names = slice_names + ['BASE']
 	if task_config['overfit_on_slice'] != None:
-		slices_names = [task_config['overfit_on_slice']]
+		slice_names.append(int(task_config['overfit_on_slice']))
 
 
+	
 
 	loss_multiplier =  1.0 / (2 * (len(slice_names))) #+1 for Base
 
@@ -79,10 +79,21 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 	if task_config['active_slice_heads'].get('shared_pred'):
 		shared_pred_head_module = copy.deepcopy(task0.head_module)
 
-
+	
 	#generate slice tasks
 	for attr_id in slice_names:
 		###For pred slice head type
+		# if task_config['overfit_on_slice'] != None and attr_id == int(task_config['overfit_on_slice']):
+		# 	slice_task_name = f"{task_name}:{attr_id}:pred"
+		# 	slice_task = create_slice_task(task0, 
+		# 								   slice_task_name, 
+		# 								   slice_head_type='pred',
+		# 								   loss_multiplier=loss_multiplier,
+		# 								  )
+		# 	tasks.append(slice_task)
+		#pdb.set_trace()
+
+
 		if task_config['active_slice_heads'].get('pred'):
 			slice_task_name = f"{task_name}:{attr_id}:pred"
 			slice_task = create_slice_task(task0, 
@@ -93,24 +104,23 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 			tasks.append(slice_task)
 
 
-		if task_config['overfit_on_slice'] == None:
-			###For ind slice head type
-			if task_config['active_slice_heads'].get('ind'):
-				slice_task_name = f"{task_name}:{attr_id}:ind"
-				slice_task = create_slice_task(task0, 
-											   slice_task_name, 
-											   slice_head_type='ind',
-											   loss_multiplier=loss_multiplier,
-											  )
-				tasks.append(slice_task)
+		###For ind slice head type
+		if task_config['active_slice_heads'].get('ind'):
+			slice_task_name = f"{task_name}:{attr_id}:ind"
+			slice_task = create_slice_task(task0, 
+										   slice_task_name, 
+										   slice_head_type='ind',
+										   loss_multiplier=loss_multiplier,
+										  )
+			tasks.append(slice_task)
 
-			###For shared pred slice head type
-			if task_config['active_slice_heads'].get('shared_pred'):
-				slice_task = copy.copy(task0)
-				slice_task.name = f"{task_name}:{attr_id}:shared_pred"
-				slice_task.slice_head_type = 'pred'
-				slice_task.head_module = shared_pred_head_module
-				tasks.append(slice_task)
+		###For shared pred slice head type
+		if task_config['active_slice_heads'].get('shared_pred'):
+			slice_task = copy.copy(task0)
+			slice_task.name = f"{task_name}:{attr_id}:shared_pred"
+			slice_task.slice_head_type = 'pred'
+			slice_task.head_module = shared_pred_head_module
+			tasks.append(slice_task)
 
 	payloads = []
 	splits = ["train", "valid", "test"]
@@ -135,9 +145,7 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 		# 	slice_task_name = f"{task_name}:BASE:ind"
 		# 	Y_dict[slice_labelset_name] = torch.ones(Y_splits[i].shape)
 		# 	labels_to_tasks[slice_labelset_name] = slice_task_name
-
 		
-
 		for attr_id in slice_names:
 			if attr_id == 'BASE':
 				mask = torch.ones(Y_splits[i].shape).long()
@@ -145,6 +153,13 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 				f = lambda x: 1 if x in attrs_dict[attr_id] else 0
 				mask = list(map(f, image_ids.tolist()))
 				mask = torch.tensor(mask)
+
+			if task_config['overfit_on_slice'] != None and attr_id == int(task_config['overfit_on_slice']):
+				s = task_config['overfit_on_slice']
+				slice_labelset_name = f"labelset:{s}:pred"
+				slice_task_name = f"{task_name}:{s}:pred"
+				Y_dict[slice_labelset_name] = mask * Y_splits[i]
+				labels_to_tasks[slice_labelset_name] = slice_task_name
 			
 			###For pred slice head type
 			if task_config['active_slice_heads'].get('pred'):
@@ -153,26 +168,29 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 				Y_dict[slice_labelset_name] = mask * Y_splits[i]
 				labels_to_tasks[slice_labelset_name] = slice_task_name
 
-			if task_config['overfit_on_slice'] == None:
-				###for shared pred head type
-				if task_config['active_slice_heads'].get('shared_pred'):
-					slice_labelset_name = f"labelset:{attr_id}:shared_pred"
-					slice_task_name = f"{task_name}:{attr_id}:shared_pred"
-					Y_dict[slice_labelset_name] = mask * Y_splits[i]
-					labels_to_tasks[slice_labelset_name] = slice_task_name
+			###for shared pred head type
+			if task_config['active_slice_heads'].get('shared_pred'):
+				slice_labelset_name = f"labelset:{attr_id}:shared_pred"
+				slice_task_name = f"{task_name}:{attr_id}:shared_pred"
+				Y_dict[slice_labelset_name] = mask * Y_splits[i]
+				labels_to_tasks[slice_labelset_name] = slice_task_name
 
 
-				###For ind slice head type
-				if task_config['active_slice_heads'].get('ind'):
-					mask[mask == 0] = 2 #to follow Metal convention
-					slice_labelset_name = f"labelset:{attr_id}:ind"
-					slice_task_name = f"{task_name}:{attr_id}:ind"
-					Y_dict[slice_labelset_name] = mask 
-					labels_to_tasks[slice_labelset_name] = slice_task_name
+			###For ind slice head type
+			if task_config['active_slice_heads'].get('ind'):
+				mask[mask == 0] = 2 #to follow Metal convention
+				slice_labelset_name = f"labelset:{attr_id}:ind"
+				slice_task_name = f"{task_name}:{attr_id}:ind"
+				Y_dict[slice_labelset_name] = mask 
+				labels_to_tasks[slice_labelset_name] = slice_task_name
 
 		dataset = MmtlDataset(X_dict, Y_dict)
 		data_loader = MmtlDataLoader(dataset, batch_size=task_config['batch_size'], shuffle=splits_shuffle[i])
 		payload = Payload(payload_name, data_loader, labels_to_tasks, splits[i])
+
+		if task_config['overfit_on_slice'] != None:
+			payload.remap_labelsets({'labelset:{}:pred'.format(task_config['overfit_on_slice']) : task_name }, default_none=True)
+
 		payloads.append(payload)
 	
 	return tasks, payloads
