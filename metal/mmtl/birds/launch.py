@@ -18,7 +18,7 @@ import pickle
 import numpy as np
 
 import sys, os
-os.environ['METALHOME'] = '/dfs/scratch1/saelig/slicing/metal/'
+os.environ['METALHOME'] = '/home/saeligkhattar/metal/'
 sys.path.append('../../../../metal')
 
 from metal.mmtl.birds.bird_tasks import create_birds_tasks_payloads, task_defaults
@@ -70,9 +70,9 @@ model_configs = {
 
 
 opj = os.path.join
-HOME_DIR = '/dfs/scratch1/saelig/slicing/'
-DATASET_DIR = opj(HOME_DIR,'CUB_200_2011')
-IMAGES_DIR = opj(DATASET_DIR, 'images')
+HOME_DIR = '/home/saeligkhattar'
+#DATASET_DIR = opj(HOME_DIR,'CUB_200_2011')
+#IMAGES_DIR = opj(DATASET_DIR, 'images')
 TENSORS_DIR = opj(HOME_DIR, 'birds_data')
 
 
