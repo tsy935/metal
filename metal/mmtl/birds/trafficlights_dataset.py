@@ -25,7 +25,7 @@ normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 
 task_defaults = {
 	"active_slice_heads": {"ind": True, "pred": True},
 	"seed" : None,
-	'batch_size' : 32,
+	'batch_size' : 4,
 	'overfit_on_slice' : None,
 }
 
@@ -55,6 +55,12 @@ class Dataset(data.Dataset):
             self.is_day[img_id] = int("day" in a['filename'])  # day -> 1
             self.is_yellow[img_id] = int(a['tag'] == 'warning')  # yellow light -> 1
 
+        self.slice_name_to_masks = {
+            "is_night": self.is_night,
+            "is_day": self.is_day,
+            "is_yellow": self.is_yellow
+        }
+
     def __len__(self):
         return len(self.labels)
 
@@ -64,33 +70,34 @@ class Dataset(data.Dataset):
         image_data = io.imread(os.path.join(IMAGES_DIR, fname))
         image_data = transform.resize(image_data, (224, 224, 3))  # resize all images to 224x224
         image_data = normalize(tt(image_data).type(torch.float32))
-
         x_dict = {"data": image_data}
-        is_night_mask = self.is_night[idx]
-        is_day_mask = self.is_day[idx]
-        is_yellow_mask = self.is_yellow[idx]
 
-        # generating labels
+        # generating label sets
         y_dict = {"labelset_gold": torch.tensor([self.labels[idx]])}
         if self.active_slice_heads.get("pred"):
-            y_dict.update({
-                "labelset:is_night_slice:pred": torch.tensor([self.labels[idx] if is_night_mask else 0]),
-                "labelset:is_day_slice:pred": torch.tensor([self.labels[idx] if is_day_mask else 0]),
-                "labelset:is_yellow_slice:pred": torch.tensor([self.labels[idx] if is_yellow_mask else 0]),
-            })
+            for sname in self.slice_names:
+                smask = self.slice_name_to_masks[sname][idx]
+                y_dict.update({
+                    f"labelset:{sname}:pred": torch.tensor([self.labels[idx] if smaks else 0])
+                })
         if self.active_slice_heads.get("ind"):
-            y_dict.update({
-                "labelset:is_night_slice:ind": torch.tensor([1 if is_night_mask else 2]),
-                "labelset:is_day_slice:ind": torch.tensor([1 if is_day_mask else 2]),
-                "labelset:is_yellow_slice:ind": torch.tensor([1 if is_yellow_mask else 2])
-            })
+            for sname in self.slice_names:
+                smask = self.slice_name_to_masks[sname][idx]
+                y_dict.update({
+                    f"labelset:{sname}:ind": torch.tensor([1 if smask else 2])
+                })
         if self.active_slice_heads.get("shared_pred"):
+            for sname in self.slice_names:
+                smask = self.slice_name_to_masks[sname][idx]
+                y_dict.update({
+                    f"labelset:{sname}:shared_pred": torch.tensor([self.labels[idx] if smask else 0])
+                })
+        if self.overfit_on_slice is not None:
+            slice_name = self.overfit_on_slice
+            smask = slice_name_to_masks[slice_name][idx]
             y_dict.update({
-                "labelset:is_night_slice:shared_pred": torch.tensor([self.labels[idx] if is_night_mask else 0]),
-                "labelset:is_day_slice:shared_pred": torch.tensor([self.labels[idx] if is_day_mask else 0]),
-                "labelset:is_yellow_slice:shared_pred": torch.tensor([self.labels[idx] if is_yellow_mask else 0]),
+                "labelset:{}:shared_pred": torch.tensor([self.labels[idx] if smask else 0])
             })
-        # TODO: add overfit_on_slice stuff.
 
         return x_dict, y_dict
 
@@ -119,9 +126,8 @@ def create_traffic_lights_tasks_payloads(slice_names, **task_config):
     slice_names = slice_names + ['BASE']
 
     if task_config['overfit_on_slice'] != None:
-        slice_names.append(int(task_config['overfit_on_slice']))
+        slice_names.append(task_config['overfit_on_slice'])
 
-    # TODO: why?
     loss_multiplier = 1.0 / (2 * (len(slice_names)))  # +1 for Base
 
     if task_config['active_slice_heads'].get('shared_pred'):
@@ -153,20 +159,21 @@ def create_traffic_lights_tasks_payloads(slice_names, **task_config):
             slice_task.name = f"{task_name}:{attr_id}:shared_pred"
             slice_task.slice_head_type = 'pred'
             slice_task.head_module = shared_pred_head_module
+            slice_task.loss_multiplier = loss_multiplier
             tasks.append(slice_task)
 
     payloads = []
     splits = ["train", "valid", "test"]
     annotation_file_name = ["train", "val", "test"]
     splits_shuffle = [True, False, False]
-    datasets = []
+
     for i, split in enumerate(splits):
         payload_name = f"Payload{i}_{split}"
         ds = Dataset(annotation_file_name[i], slice_names, active_slice_heads)
-        datasets.append(ds)
+
         labels_to_tasks = {"labelset_gold": task_name}
         for attr_id in slice_names:
-            if task_config['overfit_on_slice'] != None and attr_id == int(task_config['overfit_on_slice']):
+            if task_config['overfit_on_slice'] != None and attr_id == task_config['overfit_on_slice']:
                 s = task_config['overfit_on_slice']
                 slice_labelset_name = f"labelset:{s}:pred"
                 slice_task_name = f"{task_name}:{s}:pred"
@@ -196,7 +203,7 @@ def create_traffic_lights_tasks_payloads(slice_names, **task_config):
 
         payload = Payload(
             payload_name,
-            MmtlDataLoader(datasets[i], shuffle=splits_shuffle[i], batch_size=task_config['batch_size']),
+            MmtlDataLoader(ds, shuffle=splits_shuffle[i], batch_size=task_config['batch_size']),
             labels_to_tasks,
             split
         )

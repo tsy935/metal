@@ -66,7 +66,6 @@ model_configs = {
 
 def main(args):
     print('Loading data...')
-    datasets = get_daataset()
 
     # Extract flags into their respective config files    
     trainer_config = recursive_merge_dicts(
@@ -118,9 +117,9 @@ def main(args):
     }
     #compute baseline numbers for all slices for each comparison
     if args.model_type == 'naive':
-        slice_tasks, slice_payloads = td.create_traffic_lights_tasks_payloads(slice_names, datasets, **task_config)
+        slice_tasks, slice_payloads = td.create_traffic_lights_tasks_payloads(slice_names, **task_config)
     else: #just evaluate on the slices of interest
-        slice_tasks, slice_payloads = td.create_traffic_lights_tasks_payloads(slice_names, datasets, **task_config)
+        slice_tasks, slice_payloads = td.create_traffic_lights_tasks_payloads(slice_names, **task_config)
     pred_labelsets = [
         labelset
         for labelset in slice_payloads[0].labels_to_tasks.keys()
