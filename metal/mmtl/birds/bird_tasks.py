@@ -66,9 +66,11 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 	# 	head_module=resnet_model.fc
 	# )
 	tasks = [task0]
-	slice_names = slice_names + ['BASE']
+	
 	if task_config['overfit_on_slice'] != None:
-		slice_names.append(int(task_config['overfit_on_slice']))
+		slice_names = slice_names + [int(task_config['overfit_on_slice'])]
+	else:
+		slice_names = slice_names + ['BASE']
 
 
 	
@@ -82,17 +84,6 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 	
 	#generate slice tasks
 	for attr_id in slice_names:
-		###For pred slice head type
-		# if task_config['overfit_on_slice'] != None and attr_id == int(task_config['overfit_on_slice']):
-		# 	slice_task_name = f"{task_name}:{attr_id}:pred"
-		# 	slice_task = create_slice_task(task0, 
-		# 								   slice_task_name, 
-		# 								   slice_head_type='pred',
-		# 								   loss_multiplier=loss_multiplier,
-		# 								  )
-		# 	tasks.append(slice_task)
-		#pdb.set_trace()
-
 
 		if task_config['active_slice_heads'].get('pred'):
 			slice_task_name = f"{task_name}:{attr_id}:pred"
@@ -126,7 +117,11 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 	splits = ["train", "valid", "test"]
 	splits_shuffle = [True, False, False]
 	train_image_ids, valid_image_ids, test_image_ids = image_id_splits
-	labels_to_tasks = {"labelset_gold": task_name}
+
+	if task_config['overfit_on_slice'] == None:
+		labels_to_tasks = {"labelset_gold": task_name}
+	else:
+		labels_to_tasks = {}
 	#Create Payloads
 	for i in range(3):
 		payload_name = f"Payload{i}_{splits[i]}"
@@ -140,11 +135,6 @@ def create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits
 		else:
 			image_ids = test_image_ids
 
-		# if task_config['active_slice_heads']['ind']:
-		# 	slice_labelset_name = f"labelset:BASE:ind"
-		# 	slice_task_name = f"{task_name}:BASE:ind"
-		# 	Y_dict[slice_labelset_name] = torch.ones(Y_splits[i].shape)
-		# 	labels_to_tasks[slice_labelset_name] = slice_task_name
 		
 		for attr_id in slice_names:
 			if attr_id == 'BASE':

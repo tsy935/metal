@@ -107,6 +107,7 @@ class MetalModel(nn.Module):
         outputs = {}
         for task_name in task_names:
             # Extra .module because of DataParallel wrapper!
+
             input_module = self.input_modules[task_name].module
             if input_module not in outputs:
                 outputs[input_module] = input_module(input)
@@ -130,7 +131,8 @@ class MetalModel(nn.Module):
             labels_to_tasks: a dict of {label_name: task_name} indicating which task
                 head to use to calculate the loss for each label_set.
         """
-        task_names = set(labels_to_tasks.values())
+        task_names = set([t for t in labels_to_tasks.values() if t is not None])
+
         outputs = self.forward(X, task_names)
         loss_dict = {}  # Stores the loss by task
         count_dict = {}  # Stores the number of active examples by task
