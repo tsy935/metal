@@ -76,9 +76,9 @@ def create_mapillary_tasks_payloads(**task_config):
         dataset = get_mapillary_dataset(ROOT_DIR, 
             binary_category = 'human--person',
             split='val' if splits[i] == 'valid' else splits[i])
-        data_loader = MmtlDataLoader(dataset, batch_size=task_config['batch_size'], shuffle=splits_shuffle[i])
+        data_loader = MmtlDataLoader(dataset, batch_size=task_config['batch_size'], shuffle=splits_shuffle[i], num_workers=12, pin_memory=True)
         slice_names = list(dataset.slices.keys()) + ['BASE']
-        label_to_tasks = {'labelset_gold' : task_name}
+        labels_to_tasks = {'labelset_gold' : task_name}
         for attr_id in slices_names:
 
             if task_config['overfit_on_slice'] != None and attr_id == int(task_config['overfit_on_slice']):
