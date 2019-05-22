@@ -139,6 +139,8 @@ def main(args):
     tasks, payloads = create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
 
     print('tasks: ', tasks)
+    print('payloads: ')
+    pprint(payloads)
     # Create evaluation payload with test_slices -> primary task head
     #task_config.update({"slice_dict": slice_dict})
     task_config["active_slice_heads"] = {
@@ -149,7 +151,8 @@ def main(args):
     }
     #compute baseline numbers for all slices for each comparison
     if args.model_type == 'naive':
-        slice_tasks, slice_payloads = create_birds_tasks_payloads(list(range(1,313)), X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
+        #slice_names = list(range(1,313))
+        slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
     else: #just evaluate on the slices of interest
         slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
     pred_labelsets = [
@@ -261,6 +264,7 @@ def get_parser():
         required=False,
         help='list of attr ids'
         )
+
 
     parser = add_flags_from_config(parser, trainer_defaults)
     parser = add_flags_from_config(parser, model_defaults)
