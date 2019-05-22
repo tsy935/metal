@@ -3,12 +3,12 @@ import sys
 import metal
 import os
 import pickle
-from metal.mmtl.slicing.birds.resnet import *
+from metal.mmtl.birds.resnet import *
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
+from mapillary_dataset import MapillaryDataset, get_mapillary_dataset
 from metal.mmtl.payload import Payload
 from metal.mmtl.data import MmtlDataLoader, MmtlDataset
 from pprint import pprint
@@ -34,7 +34,7 @@ def create_mapillary_tasks_payloads(**task_config):
 	set_seed(task_config['seed'])
 	
 	NUM_CLASSES = 2
-	ROOT_DIR = '/home/ankitmathur/'
+	ROOT_DIR = '/home/ankitmathur/mapillary'
 	resnet_model = resnet50(use_as_feature_extractor=True, pretrained=True).float().cuda()
 	resnet_model.fc = nn.Linear(resnet_model.fc.in_features, NUM_CLASSES)
 	
@@ -60,7 +60,7 @@ def create_mapillary_tasks_payloads(**task_config):
 
 
 
-	loss_multiplier =  1.0 / (2 * (len(slice_names))) #+1 for Base
+	#+1 for Base
 
 
 	if task_config['active_slice_heads'].get('shared_pred'):
@@ -77,9 +77,9 @@ def create_mapillary_tasks_payloads(**task_config):
 			binary_category = 'human--person',
 			split='val' if splits[i] == 'valid' else splits[i])
 		data_loader = MmtlDataLoader(dataset, batch_size=task_config['batch_size'], shuffle=splits_shuffle[i])
-
-		slice_names = dataset.slices.keys() + ['BASE']
-		for attr_id in slices_names:
+                slice_names = list(dataset.slices.keys()) + ['BASE']
+                label_to_tasks = {'labelset_gold' : task_name}
+                for attr_id in slices_names:
 
 			if task_config['overfit_on_slice'] != None and attr_id == int(task_config['overfit_on_slice']):
 				s = task_config['overfit_on_slice']
@@ -115,7 +115,7 @@ def create_mapillary_tasks_payloads(**task_config):
 
 		payloads.append(payload)
 
-	
+	loss_multiplier =  1.0 / (2 * (len(slice_names))) 
 	#generate slice tasks
 	for attr_id in slice_names:
 
