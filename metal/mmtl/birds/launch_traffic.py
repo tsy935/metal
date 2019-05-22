@@ -94,10 +94,11 @@ def main(args):
     if args.model_type == 'naive':
         slice_names = []
     else:
-        if not args.slices:
-            raise ValueError('Need to provide a list of slices!')
-        slice_names = args.slices
-
+        # if not args.slices:
+        #     raise ValueError('Need to provide a list of slices!')
+        # slice_names = args.slices
+        # TODO: HARD CODE FOR NOW
+        slice_names = ["is_day", "is_night", "is_yellow"]
     print('Using {} slices: {}'.format(len(slice_names), slice_names))
 
     tasks, payloads = td.create_traffic_lights_tasks_payloads(

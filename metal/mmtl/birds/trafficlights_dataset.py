@@ -23,14 +23,13 @@ tt = transforms.ToTensor()
 
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 task_defaults = {
-	"active_slice_heads": {"ind": True, "pred": True},
 	"seed" : None,
 	'batch_size' : 4,
 	'overfit_on_slice' : None,
 }
 
 class Dataset(data.Dataset):
-    def __init__(self, split, slice_names, active_slice_heads):
+    def __init__(self, split, slice_names, active_slice_heads, overfit_on_slice):
         with open(os.path.join(save_dir, f'{split}.json')) as f:
             annotations = json.load(f)['annotations']
         self.filenames = {}
@@ -38,9 +37,11 @@ class Dataset(data.Dataset):
         self.bbox = {}
         self.slice_names = slice_names
         self.active_slice_heads = active_slice_heads
+        self.overfit_on_slice = overfit_on_slice
         self.is_night = {}
         self.is_day = {}
         self.is_yellow = {}
+        self.is_base = {}
         for a in annotations:
             img_id = a['image_id']
             self.filenames[img_id] = a['filename']
@@ -54,11 +55,13 @@ class Dataset(data.Dataset):
             self.is_night[img_id] = int("night" in a['filename'])  # night -> 1
             self.is_day[img_id] = int("day" in a['filename'])  # day -> 1
             self.is_yellow[img_id] = int(a['tag'] == 'warning')  # yellow light -> 1
+            self.is_base[img_id] = 1 # mask on BASE is always 1
 
         self.slice_name_to_masks = {
             "is_night": self.is_night,
             "is_day": self.is_day,
-            "is_yellow": self.is_yellow
+            "is_yellow": self.is_yellow,
+            "BASE": self.is_base
         }
 
     def __len__(self):
@@ -78,7 +81,7 @@ class Dataset(data.Dataset):
             for sname in self.slice_names:
                 smask = self.slice_name_to_masks[sname][idx]
                 y_dict.update({
-                    f"labelset:{sname}:pred": torch.tensor([self.labels[idx] if smaks else 0])
+                    f"labelset:{sname}:pred": torch.tensor([self.labels[idx] if smask else 0])
                 })
         if self.active_slice_heads.get("ind"):
             for sname in self.slice_names:
@@ -94,7 +97,7 @@ class Dataset(data.Dataset):
                 })
         if self.overfit_on_slice is not None:
             slice_name = self.overfit_on_slice
-            smask = slice_name_to_masks[slice_name][idx]
+            smask = self.slice_name_to_masks[slice_name][idx]
             y_dict.update({
                 "labelset:{}:shared_pred": torch.tensor([self.labels[idx] if smask else 0])
             })
@@ -116,7 +119,7 @@ def create_traffic_lights_tasks_payloads(slice_names, **task_config):
     active_slice_heads = task_config['active_slice_heads']
 
     resnet_model = resnet18(num_classes=2, use_as_feature_extractor=True).float().cuda()
-    task_name = 'TrafficLightClassificationTask'
+    task_name = 'TrafficLightsClassificationTask'
     task0 = MultiClassificationTask(
         name=task_name,
         input_module=resnet_model,
@@ -169,7 +172,7 @@ def create_traffic_lights_tasks_payloads(slice_names, **task_config):
 
     for i, split in enumerate(splits):
         payload_name = f"Payload{i}_{split}"
-        ds = Dataset(annotation_file_name[i], slice_names, active_slice_heads)
+        ds = Dataset(annotation_file_name[i], slice_names, active_slice_heads, task_config["overfit_on_slice"])
 
         labels_to_tasks = {"labelset_gold": task_name}
         for attr_id in slice_names:
