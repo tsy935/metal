@@ -11,14 +11,17 @@ python launch.py --model_type manual --tasks COLA --lr 5e-05 --lr_scheduler line
 import argparse
 import copy
 import json
-import os
+import os, sys
 from pprint import pprint
 import numpy as np
+
+os.environ['METALHOME'] = '/dfs/scratch0/zzweng/metal'
+sys.path.append('/dfs/scratch0/zzweng/metal')
+
 
 from metal.mmtl.metal_model import MetalModel, model_defaults
 from metal.mmtl.slicing.slice_model import *
 from metal.mmtl.slicing.moe_model import MoEModel
-from metal.mmtl.slicing.tasks import convert_to_slicing_tasks
 from metal.mmtl.trainer import MultitaskTrainer, trainer_defaults
 from metal.utils import add_flags_from_config, recursive_merge_dicts
 import metal.mmtl.birds.trafficlights_dataset as td
@@ -163,7 +166,12 @@ def main(args):
     if args.pretrained_model:
         print('Loading weights from pretrained naive model')
         pretrained_naive_model_filepath = args.pretrained_model
-        model.load_weights(pretrained_naive_model_filepath)
+        try:
+            model.load_weights(pretrained_naive_model_filepath)
+        except:
+            print('torch loading model...')
+            import torch
+            model = torch.load(pretrained_naive_model_filepath)
 
     trainer = MultitaskTrainer(**trainer_config)
 
