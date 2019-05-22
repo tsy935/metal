@@ -68,13 +68,13 @@ def save_dict(obj, f_name):
     with open(f_name, 'wb') as handle:
         pickle.dump(obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-def load_labels_and_label_file(split='train'):
+def load_labels_and_label_file(root_dir, split='train'):
     if split == 'val':
         f_labels_name, f_label_to_file_name = 'val_labels.pickle', 'val_label_to_file.pickle'
     else:
         f_labels_name, f_label_to_file_name = 'train_labels.pickle', 'train_label_to_file.pickle'
-    with open(f_labels_name, 'rb') as in_f:
+    with open(os.path.join(root_dir, f_labels_name), 'rb') as in_f:
         labels = pickle.load(in_f)
-    with open(f_label_to_file_name, 'rb') as in_f:
+    with open(os.path.join(root_dir, f_label_to_file_name), 'rb') as in_f:
         label_to_file = pickle.load(in_f)
     return labels, label_to_file
