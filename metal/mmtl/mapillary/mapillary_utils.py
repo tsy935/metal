@@ -31,12 +31,17 @@ def get_imagenet_transform(normalize=True):
 
 def get_file_names(root_dir, split='train'):
     train_dir = os.path.join(root_dir, 'training', 'images')
+    # train/val split
     val_dir = os.path.join(root_dir, 'validation', 'images')
     if split == 'train':
-        ims = os.listdir(train_dir)
+        ims = sorted(os.listdir(train_dir))[2000:]
+        return ims, train_dir
+    elif split == 'val':
+        ims = sorted(os.listdir(train_dir))[:2000]
+        return ims, train_dir
     else:
         ims = os.listdir(val_dir)
-    return ims
+        return ims, val_dir
 
 def get_all_labels(root_dir):
     with open(os.path.join(ROOT_DIR, 'config.json')) as config_file:
@@ -69,7 +74,7 @@ def save_dict(obj, f_name):
         pickle.dump(obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 def load_labels_and_label_file(root_dir, split='train'):
-    if split == 'val':
+    if split == 'test':
         f_labels_name, f_label_to_file_name = 'val_labels.pickle', 'val_label_to_file.pickle'
     else:
         f_labels_name, f_label_to_file_name = 'train_labels.pickle', 'train_label_to_file.pickle'
