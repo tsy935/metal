@@ -21,7 +21,7 @@ import sys, os
 os.environ['METALHOME'] = '/home/saeligkhattar/metal/'
 sys.path.append('../../../../metal')
 
-from metal.mmtl.birds.bird_tasks import create_birds_tasks_payloads, task_defaults
+from metal.mmtl.mapillary.mapillary_tasks import create_mapillary_tasks_payloads, task_defaults
 from metal.mmtl.metal_model import MetalModel, model_defaults
 from metal.mmtl.slicing.slice_model import *
 from metal.mmtl.slicing.moe_model import MoEModel
@@ -70,9 +70,9 @@ model_configs = {
 
 
 opj = os.path.join
-HOME_DIR = '/home/saeligkhattar'
-#DATASET_DIR = opj(HOME_DIR,'CUB_200_2011')
-#IMAGES_DIR = opj(DATASET_DIR, 'images')
+HOME_DIR = '/home/ankitmathur/metal/metal/mmtl/birds/'
+DATASET_DIR = opj(HOME_DIR,'CUB_200_2011')
+IMAGES_DIR = opj(DATASET_DIR, 'images')
 TENSORS_DIR = opj(HOME_DIR, 'birds_data')
 
 
@@ -82,23 +82,6 @@ def get_slices():
     return slices.astype(int).tolist()
 
 def main(args):
-    print('Loading data...')
-    train_image_ids = torch.load(opj(TENSORS_DIR,'train_image_ids.pt'))
-    valid_image_ids = torch.load(opj(TENSORS_DIR,'valid_image_ids.pt'))
-    test_image_ids = torch.load(opj(TENSORS_DIR,'test_image_ids.pt'))
-    X_train = torch.load(opj(TENSORS_DIR,'X_train.pt'))
-    X_valid = torch.load(opj(TENSORS_DIR,'X_valid.pt'))
-    X_test = torch.load(opj(TENSORS_DIR,'X_test.pt'))
-    Y_train = torch.load(opj(TENSORS_DIR,'Y_train.pt'))
-    Y_valid = torch.load(opj(TENSORS_DIR,'Y_valid.pt'))
-    Y_test = torch.load(opj(TENSORS_DIR,'Y_test.pt'))
-    attrs_dict = pickle.load(open(opj(TENSORS_DIR, 'attrs_dict.pkl'),'rb'))
-    print('Done')
-
-    image_id_splits = train_image_ids, valid_image_ids, test_image_ids
-    X_splits = X_train, X_valid, X_test
-    Y_splits = Y_train, Y_valid, Y_test
-
     # Extract flags into their respective config files    
     trainer_config = recursive_merge_dicts(
         trainer_defaults, vars(args), misses="ignore"
@@ -108,7 +91,7 @@ def main(args):
 
     # task_names = args.tasks.split(",")
     # assert len(task_names) == 1
-    base_task_name = 'BirdClassificationTask'
+    base_task_name = 'MapillaryClassificationTask'
 
     # Default name for log directory to task names
     if args.run_name is None:
@@ -136,7 +119,7 @@ def main(args):
 
     print('Using {} slices: {}'.format(len(slice_names), slice_names))
 
-    tasks, payloads = create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
+    tasks, payloads = create_mapillary_tasks_payloads(**task_config)
 
     print('tasks: ', tasks)
     print('payloads: ')
@@ -151,10 +134,9 @@ def main(args):
     }
     #compute baseline numbers for all slices for each comparison
     if args.model_type == 'naive':
-        slice_names = list(range(1,313))
-        slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
+        slice_tasks, slice_payloads = create_mapillary_tasks_payloads(**task_config)
     else: #just evaluate on the slices of interest
-        slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
+        slice_tasks, slice_payloads = create_mapillary_tasks_payloads(**task_config)
     pred_labelsets = [
         labelset
         for labelset in slice_payloads[0].labels_to_tasks.keys()

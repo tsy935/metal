@@ -5,7 +5,7 @@ from PIL import Image
 import os
 import numpy as np
 class MapillaryDataset(Dataset):
-    def __init__(self, root_dir, split='train', input_transform=None, label_transform=None):
+    def __init__(self, root_dir, split='train', input_transform=None, label_transform=None, active_slice_heads={}, overfit_on_slice=None):
         # load the label pickles
         self.root_dir = root_dir
         self.file_names, self.images_dir = get_file_names(self.root_dir, split)
@@ -13,6 +13,8 @@ class MapillaryDataset(Dataset):
         self.input_transform = input_transform
         self.label_transform = label_transform
         self.slices = {}
+        self.active_slice_heads = active_slice_heads
+        self.overfit_on_slice = overfit_on_slice
         # must be done *after* defining the file_names
         self.compute_slices()
     def compute_slices(self):
@@ -34,7 +36,26 @@ class MapillaryDataset(Dataset):
         labels = self.labels_file[self.file_names[idx]]
         if self.label_transform:
             labels = self.label_transform(labels)
-        return im, labels
+        
+        x_dict = {'data' : im}
+        y_dict = {'labelset_gold': labels}
+
+        for sname, mask in self.slices:
+            if self.active_slice_heads.get("pred"):
+                slice_labelset_name = f"labelset:{sname}:pred"
+                y_dict[slice_labelset_name] = mask * labels
+            if self.active_slice_heads.get("ind"):
+                mask[mask == 0] = 2 #to follow Metal convention
+                slice_labelset_name = f"labelset:{sname}:pred"
+                y_dict[slice_labelset_name] = mask
+            if self.active_slice_heads.get("shared_pred"):
+                slice_labelset_name = f"labelset:{sname}:shared_pred"
+                y_dict[slice_labelset_name] = mask * labels
+            if self.overfit_on_slice is not None:
+                slice_labelset_name = f"labelset:{sname}:pred"
+                y_dict[slice_labelset_name] = mask * labels
+    
+        return x_dict, y_dict
 
 # split \in [train, val, test]
 def get_mapillary_dataset(root_dir, binary_category = 'human--person', split='train'):
