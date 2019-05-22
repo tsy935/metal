@@ -5,6 +5,7 @@ from PIL import Image
 import os
 import numpy as np
 import torch
+import pdb
 class MapillaryDataset(Dataset):
     def __init__(self, root_dir, split='train', input_transform=None, label_transform=None, active_slice_heads={}, overfit_on_slice=None):
         # load the label pickles
@@ -20,6 +21,7 @@ class MapillaryDataset(Dataset):
         # must be done *after* defining the file_names
         self.compute_slices()
         self.get_labelsets()
+        #pdb.set_trace()
     def compute_slices(self):
         for label in self.label_mappings:
             mask = []
@@ -58,12 +60,12 @@ class MapillaryDataset(Dataset):
         
         x_dict = {'data' : im}
         y_dict = {ls_name : mask[idx] if 'ind' in ls_name else mask[idx]*label for ls_name, mask in self.labelsets.items()}
-        y_dict = {'labelset_gold': torch.tensor(label)}
+        y_dict['labelset_gold'] =  torch.tensor(label)
     
         return x_dict, y_dict
 
 # split \in [train, val, test]
-def get_mapillary_dataset(root_dir, binary_category = 'human--person', split='train'):
+def get_mapillary_dataset(root_dir, binary_category = 'human--person', split='train',active_slice_heads=None, overfit_on_slice=None ):
     train_transform, val_transform = get_imagenet_transform()
     input_transform = train_transform if split=='train' else val_transform
     def label_transform(labels):
@@ -71,4 +73,4 @@ def get_mapillary_dataset(root_dir, binary_category = 'human--person', split='tr
             if label[1] == binary_category:
                 return 1
         return 2
-    return MapillaryDataset(root_dir, split, input_transform=input_transform, label_transform=label_transform)
+    return MapillaryDataset(root_dir, split, input_transform=input_transform, label_transform=label_transform, active_slice_heads=active_slice_heads, overfit_on_slice=overfit_on_slice)

@@ -16,7 +16,7 @@ from pprint import pprint
 import torch
 import pickle
 import numpy as np
-
+import pdb
 import sys, os
 os.environ['METALHOME'] = '/home/saeligkhattar/metal/'
 sys.path.append('../../../../metal')
@@ -120,7 +120,6 @@ def main(args):
     print('Using {} slices: {}'.format(len(slice_names), slice_names))
 
     tasks, payloads = create_mapillary_tasks_payloads(**task_config)
-
     print('tasks: ', tasks)
     print('payloads: ')
     pprint(payloads)
@@ -137,6 +136,7 @@ def main(args):
         slice_tasks, slice_payloads = create_mapillary_tasks_payloads(**task_config)
     else: #just evaluate on the slices of interest
         slice_tasks, slice_payloads = create_mapillary_tasks_payloads(**task_config)
+   # pdb.set_trace()
     pred_labelsets = [
         labelset
         for labelset in slice_payloads[0].labels_to_tasks.keys()
@@ -191,7 +191,7 @@ def main(args):
     trainer.writer.write_config(task_config, "task_config")
 
     # train model
-    trainer.train_model(model, payloads)
+   # trainer.train_model(model, payloads)
 
     # Evaluate trained model on slices
     model.eval()
