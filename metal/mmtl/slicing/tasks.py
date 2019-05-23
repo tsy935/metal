@@ -15,6 +15,12 @@ def categorical_cross_entropy(X, Y):
     return F.binary_cross_entropy(
         torch.sigmoid(X["data"]), convert_labels(Y, "categorical", "onezero").float()
     )
+
+def output_hat_func(X):
+    """ Converts 1-dim output back to categorical probabilities for Metal compatibility. """
+    probs = torch.sigmoid(X["data"])
+    return torch.cat((probs, 1 - probs), dim=1)
+
 def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multiplier=1.0):
     """Creates a slice task identical to a base task but with different head params"""
     # for pred head, copy the base task head to match the output labelspace
@@ -37,7 +43,7 @@ def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multipli
 
         slice_task.head_module = head_module
         slice_task.loss_hat_func = categorical_cross_entropy
-
+        slice_task.output_hat_func = output_hat_func 
     else:
         raise ValueError(f"Invalid slice_head_type: {slice_head_type}")
 
@@ -88,10 +94,6 @@ def convert_to_slicing_tasks(tasks):
     return slicing_tasks
 
 
-def output_hat_func(X):
-    """ Converts 1-dim output back to categorical probabilities for Metal compatibility. """
-    probs = torch.sigmoid(X["data"])
-    return torch.cat((probs, 1 - probs), dim=1)
 
 def output_hat_func_multiclass(X):
     probs = F.softmax(X['data'], dim=1)
