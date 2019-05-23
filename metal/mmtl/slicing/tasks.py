@@ -11,7 +11,10 @@ from metal.mmtl.scorer import Scorer
 from metal.mmtl.task import ClassificationTask, RegressionTask
 from metal.utils import convert_labels
 
-
+def categorical_cross_entropy(X, Y):
+    return F.binary_cross_entropy(
+        torch.sigmoid(X["data"]), convert_labels(Y, "categorical", "onezero").float()
+    )
 def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multiplier=1.0):
     """Creates a slice task identical to a base task but with different head params"""
     # for pred head, copy the base task head to match the output labelspace
@@ -33,6 +36,7 @@ def create_slice_task(base_task, slice_task_name, slice_head_type, loss_multipli
                 head_module = MetalModuleWrapper(nn.Linear(head_module.in_features, 1))
 
         slice_task.head_module = head_module
+        slice_task.loss_hat_func = categorical_cross_entropy
 
     else:
         raise ValueError(f"Invalid slice_head_type: {slice_head_type}")
@@ -94,10 +98,7 @@ def output_hat_func_multiclass(X):
     return probs
 
 
-def categorical_cross_entropy(X, Y):
-    return F.binary_cross_entropy(
-        torch.sigmoid(X["data"]), convert_labels(Y, "categorical", "onezero").float()
-    )
+
 import pdb
 def cross_entropy(X, Y):
     if X['data'].shape[1] == 1: #a bit hacky
