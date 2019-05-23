@@ -98,12 +98,13 @@ def categorical_cross_entropy(X, Y):
     return F.binary_cross_entropy(
         torch.sigmoid(X["data"]), convert_labels(Y, "categorical", "onezero").float()
     )
-
+import pdb
 def cross_entropy(X, Y):
-    converted_Y = Y.flatten() - 1 
     if X['data'].shape[1] == 1: #a bit hacky
+        converted_Y = convert_labels(Y, 'categorical', 'onezero').float()
         return F.binary_cross_entropy(torch.sigmoid(X["data"].flatten()), converted_Y.float())
     else:
+        converted_Y = Y.flatten() - 1
         return F.cross_entropy(X['data'], converted_Y.long())
 
 class SliceRegressionTask(RegressionTask):

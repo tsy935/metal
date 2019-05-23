@@ -18,7 +18,7 @@ import pickle
 import numpy as np
 
 import sys, os
-os.environ['METALHOME'] = '/dfs/scratch1/saelig/slicing/metal/'
+os.environ['METALHOME'] = '/home/saeligkhattar/metal/'
 sys.path.append('../../../../metal')
 
 from metal.mmtl.birds.bird_tasks import create_birds_tasks_payloads, task_defaults
@@ -70,7 +70,7 @@ model_configs = {
 
 
 opj = os.path.join
-HOME_DIR = '/dfs/scratch1/saelig/slicing/'
+HOME_DIR = '/home/ankitmathur/'
 DATASET_DIR = opj(HOME_DIR,'CUB_200_2011')
 IMAGES_DIR = opj(DATASET_DIR, 'images')
 TENSORS_DIR = opj(HOME_DIR, 'birds_data')
@@ -151,7 +151,7 @@ def main(args):
     }
     #compute baseline numbers for all slices for each comparison
     if args.model_type == 'naive':
-        #slice_names = list(range(1,313))
+        slice_names = list(range(1,313))
         slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)
     else: #just evaluate on the slices of interest
         slice_tasks, slice_payloads = create_birds_tasks_payloads(slice_names, X_splits, Y_splits, image_id_splits, attrs_dict, **task_config)

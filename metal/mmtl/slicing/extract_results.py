@@ -21,6 +21,7 @@ metrics_to_extract = {
     "STSB": [r".*pearson_spearman$"],
     "COLA": [r".*matthews_corr"],
     "RTE": [r".*pred/accuracy"],
+    'bird' : [r".*pred/accuracy"],
 }
 
 
