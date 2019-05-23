@@ -70,9 +70,10 @@ model_configs = {
 
 
 opj = os.path.join
-HOME_DIR = '/home/ankitmathur/'
-DATASET_DIR = opj(HOME_DIR,'CUB_200_2011')
-IMAGES_DIR = opj(DATASET_DIR, 'images')
+HOME_DIR = os.environ['HOME_DIR']
+#DATASET_DIR = opj(HOME_DIR,'CUB_200_2011')
+#IMAGES_DIR = opj(DATASET_DIR, 'images')
+>>>>>>> 59eeb28e040caecc5f1e7367e0fc7edb93d80ae6
 TENSORS_DIR = opj(HOME_DIR, 'birds_data')
 
 
