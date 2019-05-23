@@ -75,8 +75,7 @@ def create_mapillary_tasks_payloads(**task_config):
         dataset = get_mapillary_dataset(ROOT_DIR, 
             binary_category = 'human--person',
             split='val' if splits[i] == 'valid' else splits[i],
-            active_slice_heads=task_config['active_slice_heads'],
-            overfit_on_slice=task_config['overfit_on_slice'],)
+            **task_config)
         data_loader = MmtlDataLoader(dataset, batch_size=task_config['batch_size'], shuffle=splits_shuffle[i], num_workers=12, pin_memory=True)
         slice_names = list(dataset.slices.keys()) + ['BASE']
         labels_to_tasks = {'labelset_gold' : task_name}
@@ -103,7 +102,6 @@ def create_mapillary_tasks_payloads(**task_config):
 
             ###For ind slice head type
             if task_config['active_slice_heads'].get('ind'):
-                mask[mask == 0] = 2 #to follow Metal convention
                 slice_labelset_name = f"labelset:{attr_id}:ind"
                 slice_task_name = f"{task_name}:{attr_id}:ind"
                 labels_to_tasks[slice_labelset_name] = slice_task_name

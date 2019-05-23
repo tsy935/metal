@@ -18,7 +18,7 @@ import pickle
 import numpy as np
 import pdb
 import sys, os
-os.environ['METALHOME'] = '/home/saeligkhattar/metal/'
+os.environ['METALHOME'] = '/home/ankitmathur/metal/'
 sys.path.append('../../../../metal')
 
 from metal.mmtl.mapillary.mapillary_tasks import create_mapillary_tasks_payloads, task_defaults
@@ -107,7 +107,7 @@ def main(args):
     #slice_dict = json.loads(args.slice_dict) if args.slice_dict else {}
     #task_config.update({"slice_dict": slice_dict})
     task_config["active_slice_heads"] = active_slice_heads
-
+    task_config["slice_names"] = args.slices
 
     if args.model_type == 'naive':
         slice_names = []
@@ -118,7 +118,7 @@ def main(args):
         #slice_names = [233,247,57]
 
     print('Using {} slices: {}'.format(len(slice_names), slice_names))
-
+    print(task_config)
     tasks, payloads = create_mapillary_tasks_payloads(**task_config)
     print('tasks: ', tasks)
     print('payloads: ')
@@ -167,7 +167,6 @@ def main(args):
                         task.name, slice_loss_mult[task.name]
                     )
                 )
-
     # Initialize and train model
     print('slice_tasks: ')
     pprint(slice_tasks)
@@ -191,7 +190,7 @@ def main(args):
     trainer.writer.write_config(task_config, "task_config")
 
     # train model
-   # trainer.train_model(model, payloads)
+    trainer.train_model(model, payloads)
 
     # Evaluate trained model on slices
     model.eval()
@@ -242,7 +241,7 @@ def get_parser():
     parser.add_argument(
         '--slices',
         nargs='+',
-        type=int,
+        type=str,
         required=False,
         help='list of attr ids'
         )

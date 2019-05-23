@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import pdb
 class MapillaryDataset(Dataset):
-    def __init__(self, root_dir, split='train', input_transform=None, label_transform=None, active_slice_heads={}, overfit_on_slice=None):
+    def __init__(self, root_dir, split='train', input_transform=None, label_transform=None, **task_config):
         # load the label pickles
         self.root_dir = root_dir
         self.file_names, self.images_dir = get_file_names(self.root_dir, split)
@@ -16,14 +16,18 @@ class MapillaryDataset(Dataset):
         self.label_transform = label_transform
         self.slices = {}
         self.labelsets = {}
-        self.active_slice_heads = active_slice_heads
-        self.overfit_on_slice = overfit_on_slice
+        self.active_slice_heads = task_config["active_slice_heads"]
+        self.overfit_on_slice = task_config["overfit_on_slice"]
+        print(task_config)
+        self.slice_names = task_config["slice_names"]
         # must be done *after* defining the file_names
         self.compute_slices()
         self.get_labelsets()
         #pdb.set_trace()
     def compute_slices(self):
         for label in self.label_mappings:
+            if label not in self.slice_names:
+                continue
             mask = []
             files_with_label = set(self.label_mappings[label])
             for f in self.file_names:
@@ -32,15 +36,17 @@ class MapillaryDataset(Dataset):
                 else:
                     mask.append(0)
             self.slices[label] = torch.tensor(mask)
+        self.slices['BASE'] = torch.ones(len(mask))
     def get_labelsets(self):
         for sname, mask in self.slices.items():
             if self.active_slice_heads.get("pred"):
                 slice_labelset_name = f"labelset:{sname}:pred"
                 self.labelsets[slice_labelset_name] = mask
             if self.active_slice_heads.get("ind"):
-                slice_labelset_name = f"labelset:{sname}:pred"
-                mask[mask == 0] = 2 #metal convention
-                self.labelsets[slice_labelset_name] = mask
+                slice_labelset_name = f"labelset:{sname}:ind"
+                tmp = mask.clone()
+                tmp[tmp == 0] = 2
+                self.labelsets[slice_labelset_name] = tmp
             if self.active_slice_heads.get("shared_pred"):
                 slice_labelset_name = f"labelset:{sname}:shared_pred"
                 self.labelsets[slice_labelset_name] = mask
@@ -65,7 +71,7 @@ class MapillaryDataset(Dataset):
         return x_dict, y_dict
 
 # split \in [train, val, test]
-def get_mapillary_dataset(root_dir, binary_category = 'human--person', split='train',active_slice_heads=None, overfit_on_slice=None ):
+def get_mapillary_dataset(root_dir, binary_category = 'human--person', split='train', **task_config):
     train_transform, val_transform = get_imagenet_transform()
     input_transform = train_transform if split=='train' else val_transform
     def label_transform(labels):
@@ -73,4 +79,4 @@ def get_mapillary_dataset(root_dir, binary_category = 'human--person', split='tr
             if label[1] == binary_category:
                 return 1
         return 2
-    return MapillaryDataset(root_dir, split, input_transform=input_transform, label_transform=label_transform, active_slice_heads=active_slice_heads, overfit_on_slice=overfit_on_slice)
+    return MapillaryDataset(root_dir, split, input_transform=input_transform, label_transform=label_transform, **task_config)
