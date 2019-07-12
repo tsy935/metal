@@ -102,5 +102,7 @@ class MTLabelModel(MTClassifier, LabelModel):
         for yi, y in enumerate(self.task_graph.feasible_set()):
             for t in range(self.t):
                 k_t = int(y[t])
-                Y_p[t][:, k_t - 1] += Y_pf[:, yi]
+                if k_t <= Y_p[t].shape[1] - 1:
+                    Y_p[t][:, k_t - 1] += Y_pf[:, yi]
+
         return Y_p
